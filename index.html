@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>اسکنر بارکد - سامانه انبارگردانی نمایشگاه ایران نوشت</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: Tahoma, Arial, sans-serif;
+      direction: rtl;
+      background: #f2f4f7;
+      margin: 0;
+      padding: 0;
+      color: #222;
+    }
+    .container { max-width: 500px; margin: 0 auto; padding: 16px; }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      margin-bottom: 16px;
+    }
+    h2 { margin-top: 0; text-align: center; }
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 6px 0 14px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+    button {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      padding: 12px 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 15px;
+      width: 100%;
+      margin-bottom: 8px;
+    }
+    button.secondary { background: #6b7280; }
+    .hidden { display: none !important; }
+    #reader { width: 100%; margin: 10px auto; }
+    .result-box { margin-top: 16px; padding: 16px; border-radius: 8px; text-align: center; font-size: 16px; }
+    .result-found { background: #dcfce7; color: #166534; }
+    .result-notfound { background: #fee2e2; color: #991b1b; }
+    .msg { padding: 10px; border-radius: 6px; margin-bottom: 10px; }
+    .msg-ok { background: #dcfce7; color: #166534; }
+    .msg-err { background: #fee2e2; color: #991b1b; }
+    .flex { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 8px; }
+    .flex > div { flex: 1; }
+    .flex button { margin-bottom: 0; }
+    label { font-size: 13px; color: #555; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- تنظیم آدرس سامانه (فقط بار اول) -->
+  <div class="card" id="setupCard">
+    <h2>تنظیم اتصال به سامانه</h2>
+    <div id="setupMsg"></div>
+    <label>آدرس وب‌اپ (لینک نهایی Deploy که با exec/ تمام می‌شود)</label>
+    <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/XXXX/exec">
+    <button onclick="saveScriptUrl()">ذخیره و ادامه</button>
+  </div>
+
+  <!-- ورود -->
+  <div class="card hidden" id="loginCard">
+    <h2>ورود به سامانه</h2>
+    <div id="loginMsg"></div>
+    <input type="text" id="username" placeholder="نام کاربری">
+    <input type="password" id="password" placeholder="رمز عبور">
+    <button onclick="doLogin()">ورود</button>
+    <button class="secondary" onclick="showSetup()">تغییر آدرس سامانه</button>
+  </div>
+
+  <!-- استعلام -->
+  <div class="card hidden" id="mainCard">
+    <h2>استعلام بارکد | <span id="userFullName"></span></h2>
+    <input type="text" id="manualBarcode" placeholder="بارکد را وارد یا اسکن کنید"
+      onkeydown="if(event.key==='Enter'){event.preventDefault(); submitInquiry();}">
+    <button onclick="toggleScanner()" id="scanBtn">📷 اسکن با دوربین</button>
+    <div id="reader" class="hidden"></div>
+    <button onclick="submitInquiry()">استعلام</button>
+    <button class="secondary" onclick="logout()">خروج</button>
+
+    <div id="inquiryResult"></div>
+
+    <div id="countsBox" class="hidden" style="margin-top:14px; border-top:1px solid #eee; padding-top:14px;">
+      <h2 style="font-size:16px;">شمارش کالا</h2>
+      <div id="countMsg"></div>
+      <div class="flex">
+        <div><label>شمارش اول</label><input type="number" id="count1" min="0" step="1"></div>
+        <button onclick="saveCount(1)">ذخیره</button>
+      </div>
+      <div class="flex">
+        <div><label>شمارش دوم</label><input type="number" id="count2" min="0" step="1"></div>
+        <button onclick="saveCount(2)">ذخیره</button>
+      </div>
+      <div class="flex">
+        <div><label>شمارش سوم</label><input type="number" id="count3" min="0" step="1"></div>
+        <button onclick="saveCount(3)">ذخیره</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  var SCRIPT_URL = localStorage.getItem('scriptUrl') || '';
+  var currentUser = null; // { username, password, fullName }
+  var currentProduct = null;
+  var html5QrCode = null;
+  var isScanning = false;
+  var resultClearTimer = null;
+
+  function init() {
+    if (SCRIPT_URL) {
+      document.getElementById('setupCard').classList.add('hidden');
+      document.getElementById('loginCard').classList.remove('hidden');
+    }
+  }
+  init();
+
+  function showSetup() {
+    document.getElementById('setupCard').classList.remove('hidden');
+    document.getElementById('loginCard').classList.add('hidden');
+    document.getElementById('scriptUrl').value = SCRIPT_URL;
+  }
+
+  function saveScriptUrl() {
+    var url = document.getElementById('scriptUrl').value.trim();
+    if (!url.startsWith('https://script.google.com/')) {
+      showMsg('setupMsg', 'آدرس معتبر نیست. باید لینک نهایی Deploy وب‌اپ باشد.', false);
+      return;
+    }
+    SCRIPT_URL = url;
+    localStorage.setItem('scriptUrl', url);
+    document.getElementById('setupCard').classList.add('hidden');
+    document.getElementById('loginCard').classList.remove('hidden');
+  }
+
+  function showMsg(elId, text, ok) {
+    document.getElementById(elId).innerHTML =
+      '<div class="msg ' + (ok ? 'msg-ok' : 'msg-err') + '">' + text + '</div>';
+  }
+
+  function apiCall(params) {
+    var url = SCRIPT_URL + '?' + Object.keys(params).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    }).join('&');
+    return fetch(url).then(function (res) { return res.json(); });
+  }
+
+  /* ---------------- ورود / خروج ---------------- */
+  function doLogin() {
+    var u = document.getElementById('username').value.trim();
+    var p = document.getElementById('password').value.trim();
+    if (!u || !p) { showMsg('loginMsg', 'نام کاربری و رمز عبور را وارد کنید', false); return; }
+    document.getElementById('loginMsg').innerHTML = '';
+
+    apiCall({ action: 'login', username: u, password: p }).then(function (res) {
+      if (res.success) {
+        currentUser = { username: u, password: p, fullName: res.fullName };
+        document.getElementById('loginCard').classList.add('hidden');
+        document.getElementById('mainCard').classList.remove('hidden');
+        document.getElementById('userFullName').innerText = res.fullName;
+      } else {
+        showMsg('loginMsg', res.message || 'خطا در ورود', false);
+      }
+    }).catch(function (err) {
+      showMsg('loginMsg', 'خطا در اتصال به سامانه: ' + err, false);
+    });
+  }
+
+  function logout() {
+    currentUser = null;
+    stopScannerIfRunning();
+    document.getElementById('mainCard').classList.add('hidden');
+    document.getElementById('loginCard').classList.remove('hidden');
+    document.getElementById('username').value = '';
+    document.getElementById('password').value = '';
+  }
+
+  /* ---------------- استعلام ---------------- */
+  function submitInquiry() {
+    var barcode = document.getElementById('manualBarcode').value.trim();
+    if (!barcode || !currentUser) return;
+
+    apiCall({ action: 'lookup', username: currentUser.username, password: currentUser.password, barcode: barcode })
+      .then(function (res) {
+        var box = document.getElementById('inquiryResult');
+        var countsBox = document.getElementById('countsBox');
+        if (resultClearTimer) { clearTimeout(resultClearTimer); resultClearTimer = null; }
+
+        if (res.found) {
+          box.innerHTML =
+            '<div class="result-box result-found">' +
+            '✅ تامین‌کننده: <b>' + res.supplierName + '</b><br>' +
+            'شماره تامین‌کننده: <b>' + res.supplierNumber + '</b><br>' +
+            'نام کالا: ' + res.productName + ' | کد: ' + res.productCode + '<br>' +
+            '<span style="font-size:20px;">موجودی انبار: <b>' + res.stock + '</b></span>' +
+            '</div>';
+          currentProduct = { supplierName: res.supplierName, rowIndex: res.rowIndex };
+          document.getElementById('count1').value = res.count1;
+          document.getElementById('count2').value = res.count2;
+          document.getElementById('count3').value = res.count3;
+          document.getElementById('countMsg').innerHTML = '';
+          countsBox.classList.remove('hidden');
+        } else {
+          box.innerHTML = '<div class="result-box result-notfound">❌ ' + res.message + '</div>';
+          currentProduct = null;
+          countsBox.classList.add('hidden');
+          resultClearTimer = setTimeout(function () { box.innerHTML = ''; }, 3000);
+        }
+        document.getElementById('manualBarcode').value = '';
+        document.getElementById('manualBarcode').focus();
+      }).catch(function (err) {
+        document.getElementById('inquiryResult').innerHTML =
+          '<div class="result-box result-notfound">خطا در اتصال: ' + err + '</div>';
+      });
+  }
+
+  function saveCount(countNumber) {
+    if (!currentProduct || !currentUser) return;
+    var input = document.getElementById('count' + countNumber);
+    var raw = input.value.trim();
+    var num = Number(raw);
+    if (raw === '' || !Number.isInteger(num) || num < 0) {
+      showMsg('countMsg', 'لطفا یک عدد صحیح مثبت وارد کنید', false);
+      return;
+    }
+    apiCall({
+      action: 'savecount',
+      username: currentUser.username,
+      password: currentUser.password,
+      supplierName: currentProduct.supplierName,
+      rowIndex: currentProduct.rowIndex,
+      countNumber: countNumber,
+      value: num
+    }).then(function (res) {
+      showMsg('countMsg', res.message, res.success);
+    }).catch(function (err) {
+      showMsg('countMsg', 'خطا در اتصال: ' + err, false);
+    });
+  }
+
+  /* ---------------- اسکنر دوربین (این صفحه بیرون از اپ‌اسکریپت است، دوربین واقعی کار می‌کند) ---------------- */
+  function toggleScanner() {
+    if (isScanning) { stopScannerIfRunning(); return; }
+    if (typeof Html5Qrcode === 'undefined') {
+      alert('کتابخانه اسکنر بارگذاری نشده. اتصال اینترنت را بررسی کنید.');
+      return;
+    }
+    var reader = document.getElementById('reader');
+    reader.classList.remove('hidden');
+
+    navigator.mediaDevices.getUserMedia({ video: true }).then(function (stream) {
+      stream.getTracks().forEach(function (t) { t.stop(); });
+      html5QrCode = new Html5Qrcode("reader");
+      Html5Qrcode.getCameras().then(function (devices) {
+        if (!devices || devices.length === 0) {
+          alert('هیچ دوربینی پیدا نشد');
+          reader.classList.add('hidden');
+          return;
+        }
+        var chosen = devices.find(function (d) { return /back|rear|environment/i.test(d.label); }) || devices[0];
+        isScanning = true;
+        html5QrCode.start(chosen.id, { fps: 10, qrbox: 220 }, function (decodedText) {
+          document.getElementById('manualBarcode').value = decodedText;
+          stopScannerIfRunning();
+          submitInquiry();
+        }, function () {}).catch(function (err) {
+          alert('خطا در راه‌اندازی دوربین: ' + err);
+          isScanning = false;
+          reader.classList.add('hidden');
+        });
+      });
+    }).catch(function (err) {
+      alert('اجازه دسترسی به دوربین داده نشد: ' + err);
+      reader.classList.add('hidden');
+    });
+  }
+
+  function stopScannerIfRunning() {
+    if (html5QrCode && isScanning) {
+      html5QrCode.stop().then(function () {
+        html5QrCode.clear();
+        document.getElementById('reader').classList.add('hidden');
+        isScanning = false;
+      }).catch(function () { isScanning = false; });
+    }
+  }
+</script>
+</body>
+</html>
