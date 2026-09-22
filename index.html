@@ -475,6 +475,7 @@
       '<div id="scannerWrap" style="position:relative; border-radius:8px; overflow:hidden; background:#000;">' +
         '<video id="scannerVideo" playsinline autoplay muted style="width:100%; display:block;"></video>' +
         '<div style="position:absolute; left:' + (GUIDE_X * 100) + '%; right:' + (GUIDE_X * 100) + '%; top:' + (GUIDE_TOP * 100) + '%; bottom:' + (GUIDE_BOTTOM * 100) + '%; border:3px solid #22c55e; border-radius:10px; box-shadow:0 0 0 2000px rgba(0,0,0,.35); pointer-events:none;"></div>' +
+        '<canvas id="countOverlay" style="position:absolute; left:' + (GUIDE_X * 100) + '%; right:' + (GUIDE_X * 100) + '%; top:' + (GUIDE_TOP * 100) + '%; bottom:' + (GUIDE_BOTTOM * 100) + '%; width:' + (100 - GUIDE_X * 200) + '%; height:' + (100 - GUIDE_TOP * 100 - GUIDE_BOTTOM * 100) + '%; pointer-events:none;"></canvas>' +
         '<button type="button" id="torchBtn" class="hidden" style="position:absolute; bottom:10px; left:10px; width:auto; margin:0; padding:8px 12px; background:rgba(0,0,0,.55); font-size:18px; border-radius:6px;">🔦</button>' +
       '</div>' +
       '<div id="zoomRow" class="hidden" style="display:flex; align-items:center; gap:8px; margin-top:8px;">' +
@@ -728,13 +729,40 @@
     countCropCanvas.height = Math.max(1, Math.round(ch * scale));
     countCropCtx.drawImage(video, cx, cy, cw, ch, 0, 0, countCropCanvas.width, countCropCanvas.height);
 
-    return countObjectsInCanvas(countCropCanvas);
+    var result = countObjectsInCanvas(countCropCanvas);
+    drawCountOverlay(result.blobs, countCropCanvas.width, countCropCanvas.height);
+    return result.count;
+  }
+
+  function drawCountOverlay(blobs, w, h) {
+    var overlay = document.getElementById('countOverlay');
+    if (!overlay) return;
+    overlay.width = w;
+    overlay.height = h;
+    var octx = overlay.getContext('2d');
+    octx.clearRect(0, 0, w, h);
+    octx.lineWidth = Math.max(2, Math.round(w / 90));
+    octx.strokeStyle = '#facc15';
+    octx.fillStyle = 'rgba(250, 204, 21, 0.85)';
+    octx.font = 'bold ' + Math.max(11, Math.round(w / 20)) + 'px Tahoma, Arial, sans-serif';
+    octx.textAlign = 'center';
+    blobs.forEach(function (b, idx) {
+      octx.beginPath();
+      octx.arc(b.cx, b.cy, b.r, 0, Math.PI * 2);
+      octx.stroke();
+      octx.beginPath();
+      octx.arc(b.cx, b.cy - b.r - 10, 9, 0, Math.PI * 2);
+      octx.fill();
+      octx.fillStyle = '#1e293b';
+      octx.fillText(String(idx + 1), b.cx, b.cy - b.r - 6);
+      octx.fillStyle = 'rgba(250, 204, 21, 0.85)';
+    });
   }
 
   function countObjectsInCanvas(canvas) {
     var ctx = canvas.getContext('2d', { willReadFrequently: true });
     var w = canvas.width, h = canvas.height;
-    if (w < 2 || h < 2) return 0;
+    if (w < 2 || h < 2) return { count: 0, blobs: [] };
     var imgData = ctx.getImageData(0, 0, w, h);
     var data = imgData.data;
     var n = w * h;
@@ -777,7 +805,7 @@
     var visited = new Uint8Array(n);
     var minArea = Math.max(15, Math.floor(n * 0.0015));
     var maxArea = Math.floor(n * 0.35);
-    var count = 0;
+    var blobs = [];
     var stack = [];
 
     for (var y = 0; y < h; y++) {
@@ -785,22 +813,34 @@
         var idx = y * w + x;
         if (binary[idx] && !visited[idx]) {
           var area = 0;
+          var minX = x, maxX = x, minY = y, maxY = y;
           stack.push(idx);
           visited[idx] = 1;
           while (stack.length) {
             var cur = stack.pop();
             area++;
             var cx2 = cur % w, cy2 = (cur - cx2) / w;
+            if (cx2 < minX) minX = cx2;
+            if (cx2 > maxX) maxX = cx2;
+            if (cy2 < minY) minY = cy2;
+            if (cy2 > maxY) maxY = cy2;
             if (cx2 > 0) { var l = cur - 1; if (binary[l] && !visited[l]) { visited[l] = 1; stack.push(l); } }
             if (cx2 < w - 1) { var r = cur + 1; if (binary[r] && !visited[r]) { visited[r] = 1; stack.push(r); } }
             if (cy2 > 0) { var u = cur - w; if (binary[u] && !visited[u]) { visited[u] = 1; stack.push(u); } }
             if (cy2 < h - 1) { var d = cur + w; if (binary[d] && !visited[d]) { visited[d] = 1; stack.push(d); } }
           }
-          if (area >= minArea && area <= maxArea) count++;
+          if (area >= minArea && area <= maxArea) {
+            var bw = maxX - minX + 1, bh = maxY - minY + 1;
+            blobs.push({
+              cx: minX + bw / 2,
+              cy: minY + bh / 2,
+              r: Math.max(bw, bh) / 2 + 2
+            });
+          }
         }
       }
     }
-    return count;
+    return { count: blobs.length, blobs: blobs };
   }
 
   function finishObjectCounting() {
