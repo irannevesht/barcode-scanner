@@ -75,6 +75,20 @@
     .flex button { width: 100%; margin: 6px 0 0 0; }
     label { font-size: 13px; color: #555; display: block; }
     .savedInfo { font-size: 11px; color: #888; font-weight: normal; }
+
+    /* ردیف فشرده شمارش: باکس شمارش + باکس مقدار جدید + دکمه ذخیره، همه کنار هم در یک سطر */
+    .count-row { display: flex; align-items: flex-end; gap: 6px; margin-bottom: 10px; flex-wrap: nowrap; }
+    .count-row .count-field { flex: 1 1 0; min-width: 0; }
+    .count-row .count-field label { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .count-row .count-field input {
+      width: 100%; padding: 8px 6px; margin: 2px 0 0 0; font-size: 14px; border: 1px solid #ccc; border-radius: 6px;
+    }
+    .count-row .count-save {
+      flex: 0 0 auto; width: auto; padding: 9px 10px; margin: 0; font-size: 13px; white-space: nowrap;
+      background: #2563eb; transition: background 0.2s;
+    }
+    .count-row .count-save.pending { background: #f59e0b; }
+    .count-row .count-save.saved { background: #22c55e; }
     #reader { width: 100%; max-width: 400px; margin: 10px auto; }
     .progress-row { margin-bottom: 10px; }
     .progress-outer { background: #e5e7eb; border-radius: 6px; overflow: hidden; height: 22px; width: 100%; }
@@ -100,6 +114,9 @@
       .result-box span { font-size: 18px !important; }
       #reader { max-width: 100%; }
       #lineChart { height: 260px; }
+      .count-row { flex-wrap: nowrap; }
+      .count-row .count-save { width: auto; padding: 9px 8px; margin-bottom: 0; font-size: 12px; }
+      .count-row .count-field input { padding: 8px 5px; font-size: 13px; }
     }
 
     .login-container { max-width: 400px; margin-top: 60px; }
@@ -155,20 +172,20 @@
       <div id="countsBox" class="hidden" style="margin-top:14px; border-top:1px solid #eee; padding-top:14px;">
         <h2 style="font-size:16px;">شمارش کالا</h2>
         <div id="countMsg"></div>
-        <div class="flex">
-          <div><label>شمارش اول <span class="savedInfo" id="savedInfo1"></span></label><input type="number" id="count1" min="0" step="1"></div>
-          <div><label>مقدار جدید</label><input type="number" id="new1" min="0" step="1"></div>
-          <div class="btn-col"><label>&nbsp;</label><button id="saveBtn1" onclick="saveCount(1)">ذخیره</button></div>
+        <div class="count-row">
+          <div class="count-field"><label>شمارش اول <span class="savedInfo" id="savedInfo1"></span></label><input type="number" id="count1" min="0" step="1"></div>
+          <div class="count-field"><label>مقدار جدید</label><input type="number" id="new1" min="0" step="1"></div>
+          <button class="count-save" id="saveBtn1" onclick="saveCount(1)">ذخیره</button>
         </div>
-        <div class="flex">
-          <div><label>شمارش دوم <span class="savedInfo" id="savedInfo2"></span></label><input type="number" id="count2" min="0" step="1"></div>
-          <div><label>مقدار جدید</label><input type="number" id="new2" min="0" step="1"></div>
-          <div class="btn-col"><label>&nbsp;</label><button id="saveBtn2" onclick="saveCount(2)">ذخیره</button></div>
+        <div class="count-row">
+          <div class="count-field"><label>شمارش دوم <span class="savedInfo" id="savedInfo2"></span></label><input type="number" id="count2" min="0" step="1"></div>
+          <div class="count-field"><label>مقدار جدید</label><input type="number" id="new2" min="0" step="1"></div>
+          <button class="count-save" id="saveBtn2" onclick="saveCount(2)">ذخیره</button>
         </div>
-        <div class="flex">
-          <div><label>شمارش سوم <span class="savedInfo" id="savedInfo3"></span></label><input type="number" id="count3" min="0" step="1"></div>
-          <div><label>مقدار جدید</label><input type="number" id="new3" min="0" step="1"></div>
-          <div class="btn-col"><label>&nbsp;</label><button id="saveBtn3" onclick="saveCount(3)">ذخیره</button></div>
+        <div class="count-row">
+          <div class="count-field"><label>شمارش سوم <span class="savedInfo" id="savedInfo3"></span></label><input type="number" id="count3" min="0" step="1"></div>
+          <div class="count-field"><label>مقدار جدید</label><input type="number" id="new3" min="0" step="1"></div>
+          <button class="count-save" id="saveBtn3" onclick="saveCount(3)">ذخیره</button>
         </div>
       </div>
     </div>
@@ -265,20 +282,20 @@
       <div id="countsBoxU" class="hidden" style="margin-top:14px; border-top:1px solid #eee; padding-top:14px;">
         <h2 style="font-size:16px;">شمارش کالا</h2>
         <div id="countMsgU"></div>
-        <div class="flex">
-          <div><label>شمارش اول <span class="savedInfo" id="savedInfo1U"></span></label><input type="number" id="count1U" min="0" step="1"></div>
-          <div><label>مقدار جدید</label><input type="number" id="new1U" min="0" step="1"></div>
-          <div class="btn-col"><label>&nbsp;</label><button id="saveBtn1U" onclick="saveCountU(1)">ذخیره</button></div>
+        <div class="count-row">
+          <div class="count-field"><label>شمارش اول <span class="savedInfo" id="savedInfo1U"></span></label><input type="number" id="count1U" min="0" step="1"></div>
+          <div class="count-field"><label>مقدار جدید</label><input type="number" id="new1U" min="0" step="1"></div>
+          <button class="count-save" id="saveBtn1U" onclick="saveCountU(1)">ذخیره</button>
         </div>
-        <div class="flex">
-          <div><label>شمارش دوم <span class="savedInfo" id="savedInfo2U"></span></label><input type="number" id="count2U" min="0" step="1"></div>
-          <div><label>مقدار جدید</label><input type="number" id="new2U" min="0" step="1"></div>
-          <div class="btn-col"><label>&nbsp;</label><button id="saveBtn2U" onclick="saveCountU(2)">ذخیره</button></div>
+        <div class="count-row">
+          <div class="count-field"><label>شمارش دوم <span class="savedInfo" id="savedInfo2U"></span></label><input type="number" id="count2U" min="0" step="1"></div>
+          <div class="count-field"><label>مقدار جدید</label><input type="number" id="new2U" min="0" step="1"></div>
+          <button class="count-save" id="saveBtn2U" onclick="saveCountU(2)">ذخیره</button>
         </div>
-        <div class="flex">
-          <div><label>شمارش سوم <span class="savedInfo" id="savedInfo3U"></span></label><input type="number" id="count3U" min="0" step="1"></div>
-          <div><label>مقدار جدید</label><input type="number" id="new3U" min="0" step="1"></div>
-          <div class="btn-col"><label>&nbsp;</label><button id="saveBtn3U" onclick="saveCountU(3)">ذخیره</button></div>
+        <div class="count-row">
+          <div class="count-field"><label>شمارش سوم <span class="savedInfo" id="savedInfo3U"></span></label><input type="number" id="count3U" min="0" step="1"></div>
+          <div class="count-field"><label>مقدار جدید</label><input type="number" id="new3U" min="0" step="1"></div>
+          <button class="count-save" id="saveBtn3U" onclick="saveCountU(3)">ذخیره</button>
         </div>
       </div>
     </div>
@@ -620,7 +637,7 @@
       [1, 2, 3].forEach(function (n) {
         document.getElementById('new' + n).value = '';
         var b = document.getElementById('saveBtn' + n);
-        b.style.background = '';
+        b.classList.remove('pending', 'saved');
         var cVal = document.getElementById('count' + n).value;
         lastSaved[n] = (cVal === '' || cVal === undefined) ? 0 : Number(cVal);
         updateSavedInfo(n);
@@ -694,6 +711,9 @@
         newInput.value = '';
         lastSaved[countNumber] = total;
         updateSavedInfo(countNumber);
+        var b = document.getElementById('saveBtn' + countNumber);
+        b.classList.remove('pending');
+        b.classList.add('saved');
       }
     }).catch(function (err) { showMsg('countMsg', 'خطا در اتصال: ' + err, false); });
   }
@@ -757,6 +777,8 @@
       document.getElementById('count3U').value = res.count3;
       [1, 2, 3].forEach(function (n) {
         document.getElementById('new' + n + 'U').value = '';
+        var b = document.getElementById('saveBtn' + n + 'U');
+        b.classList.remove('pending', 'saved');
         var cVal = document.getElementById('count' + n + 'U').value;
         lastSavedU[n] = (cVal === '' || cVal === undefined) ? 0 : Number(cVal);
         updateSavedInfoU(n);
@@ -830,6 +852,9 @@
         newInput.value = '';
         lastSavedU[countNumber] = total;
         updateSavedInfoU(countNumber);
+        var b = document.getElementById('saveBtn' + countNumber + 'U');
+        b.classList.remove('pending');
+        b.classList.add('saved');
       }
     }).catch(function (err) { showMsg('countMsgU', 'خطا در اتصال: ' + err, false); });
   }
@@ -1040,10 +1065,21 @@
   function stopScannerIfRunningU() { scannerUser.stop(); }
 
   [1, 2, 3].forEach(function (n) {
-    document.getElementById('new' + n).addEventListener('input', function () {});
-    document.getElementById('count' + n).addEventListener('input', function () {});
-    document.getElementById('new' + n + 'U').addEventListener('input', function () {});
-    document.getElementById('count' + n + 'U').addEventListener('input', function () {});
+    var onChange = function () {
+      var b = document.getElementById('saveBtn' + n);
+      b.classList.remove('saved');
+      b.classList.add('pending');
+    };
+    document.getElementById('new' + n).addEventListener('input', onChange);
+    document.getElementById('count' + n).addEventListener('input', onChange);
+
+    var onChangeU = function () {
+      var b = document.getElementById('saveBtn' + n + 'U');
+      b.classList.remove('saved');
+      b.classList.add('pending');
+    };
+    document.getElementById('new' + n + 'U').addEventListener('input', onChangeU);
+    document.getElementById('count' + n + 'U').addEventListener('input', onChangeU);
   });
 </script>
 </body>
