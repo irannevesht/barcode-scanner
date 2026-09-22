@@ -61,7 +61,7 @@
     .flex { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
     .flex > div { flex: 2; }
     .flex > div.btn-col { flex: 1; }
-    .flex button { width: 100%; margin-bottom: 0; padding-left: 4px; padding-right: 4px; transition: background 0.2s; }
+    .flex button { width: 100%; margin: 6px 0 0 0; padding-left: 4px; padding-right: 4px; transition: background 0.2s; }
     .flex button.pending { background: #f59e0b; }
     .flex button.saved { background: #22c55e; }
     label { font-size: 13px; color: #555; display: block; }
@@ -82,6 +82,11 @@
   <!-- استعلام -->
   <div class="card hidden" id="mainCard">
     <h2>استعلام بارکد | <span id="userFullName"></span></h2>
+
+    <label>جستجوی نام یا کد کالا</label>
+    <input type="text" id="productSearch" list="productListOptions" placeholder="نام یا کد کالا را تایپ یا از لیست انتخاب کنید">
+    <datalist id="productListOptions"></datalist>
+
     <input type="text" id="manualBarcode" placeholder="بارکد را وارد یا اسکن کنید"
       onkeydown="if(event.key==='Enter'){event.preventDefault(); submitInquiry();}">
     <button onclick="toggleScanner()" id="scanBtn">📷 اسکن با دوربین</button>
@@ -148,6 +153,7 @@
         document.getElementById('loginCard').classList.add('hidden');
         document.getElementById('mainCard').classList.remove('hidden');
         document.getElementById('userFullName').innerText = res.fullName;
+        loadProductList();
       } else {
         showMsg('loginMsg', res.message || 'خطا در ورود', false);
       }
@@ -165,6 +171,51 @@
     document.getElementById('password').value = '';
   }
 
+  /* ---------------- جستجوی نام/کد کالا با لیست کشویی ---------------- */
+  var allProducts = [];
+
+  function productLabel(p) {
+    return (p.name || '') + ' (' + (p.code || '') + ')';
+  }
+
+  function loadProductList() {
+    if (!currentUser) return;
+    apiCall({ action: 'listproducts', username: currentUser.username, password: currentUser.password })
+      .then(function (res) {
+        if (!res.success) return;
+        allProducts = res.products || [];
+        var dl = document.getElementById('productListOptions');
+        dl.innerHTML = '';
+        allProducts.forEach(function (p) {
+          var opt = document.createElement('option');
+          opt.value = productLabel(p);
+          dl.appendChild(opt);
+        });
+      })
+      .catch(function () {});
+  }
+
+  function selectSearchedProduct() {
+    var input = document.getElementById('productSearch');
+    var val = input.value.trim();
+    if (!val) return;
+    var match = allProducts.find(function (p) { return productLabel(p) === val; });
+    if (!match) return;
+    var firstBarcode = String(match.barcode || '').split(',')[0].trim();
+    if (!firstBarcode) return;
+    input.value = '';
+    document.getElementById('manualBarcode').value = firstBarcode;
+    submitInquiry();
+  }
+
+  document.getElementById('productSearch').addEventListener('change', selectSearchedProduct);
+  document.getElementById('productSearch').addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      selectSearchedProduct();
+    }
+  });
+
   /* ---------------- استعلام ---------------- */
   function submitInquiry() {
     var barcode = document.getElementById('manualBarcode').value.trim();
@@ -180,8 +231,9 @@
           box.innerHTML =
             '<div class="result-box result-found">' +
             '✅ تامین‌کننده: <b>' + res.supplierName + '</b><br>' +
-            'شماره تامین‌کننده: <b>' + res.supplierNumber + '</b><br>' +
-            'نام کالا: ' + res.productName + ' | کد: ' + res.productCode + '<br>' +
+            'کد تامین‌کننده: <b>' + res.supplierNumber + '</b><br>' +
+            'نام کالا: ' + res.productName + '<br>' +
+            'کد کالا: ' + res.productCode + '<br>' +
             '<span style="font-size:20px;">موجودی انبار: <b>' + res.stock + '</b></span>' +
             '</div>';
           currentProduct = { supplierName: res.supplierName, rowIndex: res.rowIndex };
