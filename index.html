@@ -235,6 +235,7 @@
             'کد تامین‌کننده: <b>' + res.supplierNumber + '</b><br>' +
             'نام کالا: ' + res.productName + '<br>' +
             'کد کالا: ' + res.productCode + '<br>' +
+            'بارکد: ' + res.barcode + '<br>' +
             '<span style="font-size:20px;">موجودی انبار: <b>' + res.stock + '</b></span>' +
             '</div>';
           currentProduct = { supplierName: res.supplierName, rowIndex: res.rowIndex };
@@ -270,7 +271,7 @@
 
   function updateSavedInfo(n) {
     document.getElementById('savedInfo' + n).innerText =
-      '(آخرین ذخیره: ' + lastSaved[n] + ')';
+      '(' + lastSaved[n] + ')';
   }
 
   function saveCount(countNumber) {
