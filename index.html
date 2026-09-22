@@ -91,11 +91,27 @@
     <input type="text" id="manualBarcode" placeholder="بارکد را وارد یا اسکن کنید"
       onkeydown="if(event.key==='Enter'){event.preventDefault(); submitInquiry();}">
     <button onclick="toggleScanner()" id="scanBtn">📷 اسکن با دوربین</button>
+    <button onclick="toggleCountScanner()" id="countScanBtn">🔢 شمارش با اسکن (چند کالا)</button>
     <div id="reader" class="hidden"></div>
+    <div id="tallyLiveBox" class="hidden" style="text-align:center; margin-bottom:10px;">
+      <div id="tallyProductName" style="font-size:14px; color:#555; min-height:20px;"></div>
+      <div id="tallyCountDisplay" style="font-size:36px; font-weight:bold; color:#2563eb;">0</div>
+      <div style="font-size:12px; color:#888; margin-bottom:8px;">هر بار کالا را زیر دوربین بگیرید و بردارید تا یک عدد اضافه شود</div>
+      <button onclick="finishTallyCounting()">✅ پایان شمارش و ثبت</button>
+      <button class="secondary" onclick="cancelTallyCounting()">لغو شمارش</button>
+    </div>
     <button onclick="submitInquiry()">استعلام</button>
     <button class="secondary" onclick="logout()">خروج</button>
 
     <div id="inquiryResult"></div>
+
+    <div id="tallyAssignBox" class="hidden" style="margin-top:14px; border-top:1px solid #eee; padding-top:14px;">
+      <div class="tallyCountText" style="font-weight:bold; margin-bottom:10px; text-align:center;"></div>
+      <button onclick="assignTally(1)">افزودن به شمارش اول</button>
+      <button onclick="assignTally(2)">افزودن به شمارش دوم</button>
+      <button onclick="assignTally(3)">افزودن به شمارش سوم</button>
+      <button class="secondary" onclick="cancelTallyAssign()">لغو</button>
+    </div>
 
     <div id="countsBox" class="hidden" style="margin-top:14px; border-top:1px solid #eee; padding-top:14px;">
       <h2 style="font-size:16px;">شمارش کالا</h2>
@@ -218,46 +234,50 @@
   });
 
   /* ---------------- استعلام ---------------- */
+  function renderInquiryResult(res) {
+    var box = document.getElementById('inquiryResult');
+    var countsBox = document.getElementById('countsBox');
+    if (resultClearTimer) { clearTimeout(resultClearTimer); resultClearTimer = null; }
+
+    if (res.found) {
+      box.innerHTML =
+        '<div class="result-box result-found">' +
+        '✅ تامین‌کننده: <b>' + res.supplierName + '</b><br>' +
+        'کد تامین‌کننده: <b>' + res.supplierNumber + '</b><br>' +
+        'نام کالا: ' + res.productName + '<br>' +
+        'کد کالا: ' + res.productCode + '<br>' +
+        'بارکد: ' + res.barcode + '<br>' +
+        '<span style="font-size:20px;">موجودی انبار: <b>' + res.stock + '</b></span>' +
+        '</div>';
+      currentProduct = { supplierName: res.supplierName, rowIndex: res.rowIndex };
+      document.getElementById('count1').value = res.count1;
+      document.getElementById('count2').value = res.count2;
+      document.getElementById('count3').value = res.count3;
+      [1, 2, 3].forEach(function (n) {
+        document.getElementById('new' + n).value = '';
+        var b = document.getElementById('saveBtn' + n);
+        b.classList.remove('pending', 'saved');
+        var cVal = document.getElementById('count' + n).value;
+        lastSaved[n] = (cVal === '' || cVal === undefined) ? 0 : Number(cVal);
+        updateSavedInfo(n);
+      });
+      document.getElementById('countMsg').innerHTML = '';
+      countsBox.classList.remove('hidden');
+    } else {
+      box.innerHTML = '<div class="result-box result-notfound">❌ ' + res.message + '</div>';
+      currentProduct = null;
+      countsBox.classList.add('hidden');
+      resultClearTimer = setTimeout(function () { box.innerHTML = ''; }, 3000);
+    }
+  }
+
   function submitInquiry() {
     var barcode = document.getElementById('manualBarcode').value.trim();
     if (!barcode || !currentUser) return;
 
     apiCall({ action: 'lookup', username: currentUser.username, password: currentUser.password, barcode: barcode })
       .then(function (res) {
-        var box = document.getElementById('inquiryResult');
-        var countsBox = document.getElementById('countsBox');
-        if (resultClearTimer) { clearTimeout(resultClearTimer); resultClearTimer = null; }
-
-        if (res.found) {
-          box.innerHTML =
-            '<div class="result-box result-found">' +
-            '✅ تامین‌کننده: <b>' + res.supplierName + '</b><br>' +
-            'کد تامین‌کننده: <b>' + res.supplierNumber + '</b><br>' +
-            'نام کالا: ' + res.productName + '<br>' +
-            'کد کالا: ' + res.productCode + '<br>' +
-            'بارکد: ' + res.barcode + '<br>' +
-            '<span style="font-size:20px;">موجودی انبار: <b>' + res.stock + '</b></span>' +
-            '</div>';
-          currentProduct = { supplierName: res.supplierName, rowIndex: res.rowIndex };
-          document.getElementById('count1').value = res.count1;
-          document.getElementById('count2').value = res.count2;
-          document.getElementById('count3').value = res.count3;
-          [1, 2, 3].forEach(function (n) {
-            document.getElementById('new' + n).value = '';
-            var b = document.getElementById('saveBtn' + n);
-            b.classList.remove('pending', 'saved');
-            var cVal = document.getElementById('count' + n).value;
-            lastSaved[n] = (cVal === '' || cVal === undefined) ? 0 : Number(cVal);
-            updateSavedInfo(n);
-          });
-          document.getElementById('countMsg').innerHTML = '';
-          countsBox.classList.remove('hidden');
-        } else {
-          box.innerHTML = '<div class="result-box result-notfound">❌ ' + res.message + '</div>';
-          currentProduct = null;
-          countsBox.classList.add('hidden');
-          resultClearTimer = setTimeout(function () { box.innerHTML = ''; }, 3000);
-        }
+        renderInquiryResult(res);
         document.getElementById('manualBarcode').value = '';
         document.getElementById('manualBarcode').blur();
       }).catch(function (err) {
@@ -371,6 +391,31 @@
   var usingDetectorApi = false; // true = از موتور BarcodeDetector استفاده می‌شود
   var torchOn = false;
 
+  // حالت اسکن: 'single' = یک بارکد و توقف، 'tally' = شمارش پیوسته چند کالا
+  var scanMode = 'single';
+  var tallyBarcode = null;
+  var tallyCount = 0;
+  var tallyCodeVisible = false;
+  var tallyIdentifyResult = null;
+  var tallyLastFallbackTime = 0;
+
+  function handleTallyFallbackDetection(code) {
+    var now = Date.now();
+    if (tallyBarcode === null) {
+      tallyBarcode = code;
+      tallyCount = 1;
+      tallyLastFallbackTime = now;
+      identifyTallyProduct(code);
+      updateTallyUI();
+    } else if (code === tallyBarcode) {
+      if (now - tallyLastFallbackTime > 1200) {
+        tallyCount++;
+        tallyLastFallbackTime = now;
+        updateTallyUI();
+      }
+    }
+  }
+
   // نسبت‌های کادر راهنما (هم برای نمایش کادر سبز و هم برای برش بزرگ‌نمایی دیجیتال استفاده می‌شود)
   var GUIDE_X = 0.06;
   var GUIDE_TOP = 0.30;
@@ -382,9 +427,23 @@
 
   function toggleScanner() {
     if (isScanning) { stopScannerIfRunning(); return; }
+    scanMode = 'single';
+    document.getElementById('tallyLiveBox').classList.add('hidden');
     var reader = document.getElementById('reader');
     reader.classList.remove('hidden');
     reader.innerHTML = '<p style="text-align:center; color:#888;">در حال باز کردن دوربین...</p>';
+    startScanner(reader);
+  }
+
+  function toggleCountScanner() {
+    if (isScanning) { stopScannerIfRunning(); }
+    resetTallyState();
+    scanMode = 'tally';
+    var reader = document.getElementById('reader');
+    reader.classList.remove('hidden');
+    reader.innerHTML = '<p style="text-align:center; color:#888;">در حال باز کردن دوربین...</p>';
+    document.getElementById('tallyLiveBox').classList.remove('hidden');
+    document.getElementById('tallyAssignBox').classList.add('hidden');
     startScanner(reader);
   }
 
@@ -467,7 +526,9 @@
       try {
         detectFrame(video).then(function (code) {
           busy = false;
-          if (code) {
+          if (scanMode === 'tally') {
+            handleTallyFrame(code);
+          } else if (code) {
             document.getElementById('manualBarcode').value = code;
             stopScannerIfRunning();
             submitInquiry();
@@ -477,6 +538,97 @@
         busy = false; // اگر تشخیص یک فریم به‌صورت غیرمنتظره خطای همزمان بدهد، اسکنر قفل نشود
       }
     }, 180);
+  }
+
+  /* ---------------- شمارش پیوسته چند کالا با اسکن ----------------
+   * منطق: شمارش فقط با «لبه‌ی ورود» بارکد به کادر افزایش می‌یابد؛ یعنی تا وقتی کالا
+   * زیر دوربین است دوباره شمارش نمی‌شود، و فقط با برداشتن کالا (خروج بارکد از کادر)
+   * و قرار دادن کالای بعدی، عدد یک واحد اضافه می‌شود.
+   */
+  function handleTallyFrame(code) {
+    if (code) {
+      if (!tallyCodeVisible) {
+        tallyCodeVisible = true;
+        if (tallyBarcode === null) {
+          tallyBarcode = code;
+          tallyCount = 1;
+          identifyTallyProduct(code);
+        } else if (code === tallyBarcode) {
+          tallyCount++;
+        } else {
+          var nameEl = document.getElementById('tallyProductName');
+          var prevText = nameEl.innerText;
+          nameEl.innerText = '⚠️ بارکد متفاوت شناسایی شد و شمارش نشد';
+          setTimeout(function () { nameEl.innerText = prevText; }, 1500);
+        }
+        updateTallyUI();
+      }
+    } else {
+      tallyCodeVisible = false;
+    }
+  }
+
+  function identifyTallyProduct(code) {
+    apiCall({ action: 'lookup', username: currentUser.username, password: currentUser.password, barcode: code })
+      .then(function (res) {
+        tallyIdentifyResult = res;
+        document.getElementById('tallyProductName').innerText =
+          res.found ? res.productName : 'کالا در سیستم پیدا نشد';
+      })
+      .catch(function () {
+        document.getElementById('tallyProductName').innerText = 'خطا در شناسایی کالا';
+      });
+  }
+
+  function updateTallyUI() {
+    document.getElementById('tallyCountDisplay').innerText = tallyCount;
+  }
+
+  function resetTallyState() {
+    tallyBarcode = null;
+    tallyCount = 0;
+    tallyCodeVisible = false;
+    tallyIdentifyResult = null;
+    document.getElementById('tallyProductName').innerText = '';
+    updateTallyUI();
+  }
+
+  function finishTallyCounting() {
+    stopScannerIfRunning();
+    document.getElementById('tallyLiveBox').classList.add('hidden');
+    if (!tallyIdentifyResult || !tallyIdentifyResult.found || tallyCount < 1) {
+      alert('کالایی شناسایی نشد یا هیچ موردی شمارش نشد.');
+      resetTallyState();
+      return;
+    }
+    renderInquiryResult(tallyIdentifyResult);
+    var box = document.getElementById('tallyAssignBox');
+    box.querySelector('.tallyCountText').innerText = 'تعداد شمارش‌شده با اسکن: ' + tallyCount;
+    box.dataset.count = tallyCount;
+    box.classList.remove('hidden');
+  }
+
+  function cancelTallyCounting() {
+    stopScannerIfRunning();
+    document.getElementById('tallyLiveBox').classList.add('hidden');
+    resetTallyState();
+  }
+
+  function assignTally(n) {
+    var box = document.getElementById('tallyAssignBox');
+    var count = Number(box.dataset.count || 0);
+    if (!count) return;
+    var newInput = document.getElementById('new' + n);
+    var current = newInput.value.trim() === '' ? 0 : Number(newInput.value.trim());
+    newInput.value = current + count;
+    newInput.dispatchEvent(new Event('input'));
+    box.classList.add('hidden');
+    resetTallyState();
+  }
+
+  function cancelTallyAssign() {
+    document.getElementById('tallyAssignBox').classList.add('hidden');
+    resetTallyState();
   }
 
   function detectFrame(video) {
@@ -580,6 +732,10 @@
             advanced: [{ focusMode: "continuous" }]
           }
         }, function (decodedText) {
+          if (scanMode === 'tally') {
+            handleTallyFallbackDetection(decodedText);
+            return;
+          }
           document.getElementById('manualBarcode').value = decodedText;
           stopScannerIfRunning();
           submitInquiry();
