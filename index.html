@@ -59,9 +59,12 @@
     .msg-ok { background: #dcfce7; color: #166534; }
     .msg-err { background: #fee2e2; color: #991b1b; }
     .flex { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 8px; }
-    .flex > div { flex: 4; }
-    .flex button { flex: 1; width: auto; margin-bottom: 0; padding-left: 4px; padding-right: 4px; }
+    .flex > div { flex: 2; }
+    .flex button { flex: 1; width: auto; margin-bottom: 0; padding-left: 4px; padding-right: 4px; transition: background 0.2s; }
+    .flex button.pending { background: #f59e0b; }
+    .flex button.saved { background: #22c55e; }
     label { font-size: 13px; color: #555; }
+    input[readonly] { background: #f3f4f6; color: #444; }
   </style>
 </head>
 <body>
@@ -92,16 +95,19 @@
       <h2 style="font-size:16px;">شمارش کالا</h2>
       <div id="countMsg"></div>
       <div class="flex">
-        <div><label>شمارش اول</label><input type="number" id="count1" min="0" step="1"></div>
-        <button onclick="saveCount(1)">ذخیره</button>
+        <div><label>شمارش اول</label><input type="number" id="count1" min="0" step="1" readonly></div>
+        <div><label>مقدار جدید</label><input type="number" id="new1" min="0" step="1" placeholder="عدد صحیح مثبت"></div>
+        <button id="saveBtn1" onclick="saveCount(1)">ذخیره</button>
       </div>
       <div class="flex">
-        <div><label>شمارش دوم</label><input type="number" id="count2" min="0" step="1"></div>
-        <button onclick="saveCount(2)">ذخیره</button>
+        <div><label>شمارش دوم</label><input type="number" id="count2" min="0" step="1" readonly></div>
+        <div><label>مقدار جدید</label><input type="number" id="new2" min="0" step="1" placeholder="عدد صحیح مثبت"></div>
+        <button id="saveBtn2" onclick="saveCount(2)">ذخیره</button>
       </div>
       <div class="flex">
-        <div><label>شمارش سوم</label><input type="number" id="count3" min="0" step="1"></div>
-        <button onclick="saveCount(3)">ذخیره</button>
+        <div><label>شمارش سوم</label><input type="number" id="count3" min="0" step="1" readonly></div>
+        <div><label>مقدار جدید</label><input type="number" id="new3" min="0" step="1" placeholder="عدد صحیح مثبت"></div>
+        <button id="saveBtn3" onclick="saveCount(3)">ذخیره</button>
       </div>
     </div>
   </div>
@@ -182,6 +188,11 @@
           document.getElementById('count1').value = res.count1;
           document.getElementById('count2').value = res.count2;
           document.getElementById('count3').value = res.count3;
+          [1, 2, 3].forEach(function (n) {
+            document.getElementById('new' + n).value = '';
+            var b = document.getElementById('saveBtn' + n);
+            b.classList.remove('pending', 'saved');
+          });
           document.getElementById('countMsg').innerHTML = '';
           countsBox.classList.remove('hidden');
         } else {
@@ -200,13 +211,23 @@
 
   function saveCount(countNumber) {
     if (!currentProduct || !currentUser) return;
-    var input = document.getElementById('count' + countNumber);
-    var raw = input.value.trim();
-    var num = Number(raw);
-    if (raw === '' || !Number.isInteger(num) || num < 0) {
-      showMsg('countMsg', 'لطفا یک عدد صحیح مثبت وارد کنید', false);
+    var newInput = document.getElementById('new' + countNumber);
+    var countInput = document.getElementById('count' + countNumber);
+    var btn = document.getElementById('saveBtn' + countNumber);
+
+    var newRaw = newInput.value.trim();
+    var newNum = Number(newRaw);
+    if (newRaw === '' || !Number.isInteger(newNum) || newNum <= 0) {
+      showMsg('countMsg', 'لطفا یک عدد صحیح مثبت در باکس «مقدار جدید» وارد کنید', false);
       return;
     }
+
+    var existingRaw = countInput.value.toString().trim();
+    var existingNum = Number(existingRaw);
+    if (existingRaw === '' || !Number.isInteger(existingNum) || existingNum < 0) existingNum = 0;
+
+    var total = existingNum + newNum;
+
     apiCall({
       action: 'savecount',
       username: currentUser.username,
@@ -214,13 +235,32 @@
       supplierName: currentProduct.supplierName,
       rowIndex: currentProduct.rowIndex,
       countNumber: countNumber,
-      value: num
+      value: total
     }).then(function (res) {
       showMsg('countMsg', res.message, res.success);
+      if (res.success) {
+        countInput.value = total;
+        newInput.value = '';
+        btn.classList.remove('pending');
+        btn.classList.add('saved');
+      }
     }).catch(function (err) {
       showMsg('countMsg', 'خطا در اتصال: ' + err, false);
     });
   }
+
+  [1, 2, 3].forEach(function (n) {
+    var newInput = document.getElementById('new' + n);
+    var btn = document.getElementById('saveBtn' + n);
+    newInput.addEventListener('input', function () {
+      if (newInput.value.trim() !== '') {
+        btn.classList.remove('saved');
+        btn.classList.add('pending');
+      } else {
+        btn.classList.remove('pending', 'saved');
+      }
+    });
+  });
 
   /* ---------------- اسکنر دوربین ----------------
    * موتور تشخیص: همیشه از کتابخانه‌ی barcode-detector با موتور ZXing وب‌اسمبلی استفاده
