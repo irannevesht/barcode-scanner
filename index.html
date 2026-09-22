@@ -6,10 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>اسکنر بارکد - سامانه انبارگردانی نمایشگاه ایران نوشت</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <!-- موتور اصلیِ تشخیص بارکد: همیشه از ZXing نسخه‌ی وب‌اسمبلی استفاده می‌کند، نه موتور بومی
-       گوشی. چون موتور بومی روی اندروید به یک ماژول گوگل‌پلی‌سرویسز وابسته‌ست که روی بعضی
-       گوشی‌ها (مثلاً به‌خاطر محدودیت‌های منطقه‌ای) دانلود/فعال نمی‌شود و بی‌صدا هیچ‌چیز
-       تشخیص نمی‌دهد؛ نسخه‌ی وب‌اسمبلی کاملاً مستقل و روی همه‌ی گوشی‌ها یکسان کار می‌کند -->
   <script src="https://fastly.jsdelivr.net/npm/barcode-detector@3/dist/iife/ponyfill.min.js"></script>
   <style>
     * { box-sizing: border-box; }
@@ -50,7 +46,6 @@
       margin-bottom: 8px;
     }
     button.secondary { background: #6b7280; }
-    button.count-btn { background: #7c3aed; }
     .hidden { display: none !important; }
     #reader { width: 100%; margin: 10px auto; }
     .result-box { margin-top: 16px; padding: 16px; border-radius: 8px; text-align: center; font-size: 16px; }
@@ -93,36 +88,14 @@
       onkeydown="if(event.key==='Enter'){event.preventDefault(); submitInquiry();}">
     <button onclick="toggleScanner()" id="scanBtn">📷 اسکن با دوربین</button>
     <div id="reader" class="hidden"></div>
-
-    <!-- نمایش زنده‌ی شمارش تعداد با دوربین (بعد از شناسایی کالا) -->
-    <div id="countLiveBox" class="hidden" style="text-align:center; margin-bottom:10px;">
-      <div id="countLiveProductName" style="font-size:14px; color:#555; min-height:20px;"></div>
-      <div id="countLiveDisplay" style="font-size:36px; font-weight:bold; color:#7c3aed;">0</div>
-      <div style="font-size:12px; color:#888; margin-bottom:8px;">کالاها را طوری زیر دوربین بگیرید که همه داخل کادر سبز و از هم جدا باشند</div>
-      <button onclick="finishObjectCounting()">✅ ثبت این تعداد</button>
-      <button class="secondary" onclick="cancelObjectCounting()">لغو شمارش</button>
-    </div>
-
     <button onclick="submitInquiry()">استعلام</button>
     <button class="secondary" onclick="logout()">خروج</button>
 
     <div id="inquiryResult"></div>
 
-    <!-- انتخاب اینکه تعداد شمارش‌شده به کدام شمارش اضافه شود -->
-    <div id="tallyAssignBox" class="hidden" style="margin-top:14px; border-top:1px solid #eee; padding-top:14px;">
-      <div class="tallyCountText" style="font-weight:bold; margin-bottom:10px; text-align:center;"></div>
-      <button onclick="assignTally(1)">افزودن به شمارش اول</button>
-      <button onclick="assignTally(2)">افزودن به شمارش دوم</button>
-      <button onclick="assignTally(3)">افزودن به شمارش سوم</button>
-      <button class="secondary" onclick="cancelTallyAssign()">لغو</button>
-    </div>
-
     <div id="countsBox" class="hidden" style="margin-top:14px; border-top:1px solid #eee; padding-top:14px;">
       <h2 style="font-size:16px;">شمارش کالا</h2>
       <div id="countMsg"></div>
-
-      <button class="count-btn" onclick="startObjectCounting()">🔢 شمارش تعداد با دوربین</button>
-
       <div class="flex">
         <div><label>شمارش اول <span class="savedInfo" id="savedInfo1"></span></label><input type="number" id="count1" min="0" step="1"></div>
         <div><label>مقدار جدید</label><input type="number" id="new1" min="0" step="1"></div>
@@ -144,9 +117,8 @@
 </div>
 
 <script>
-  // آدرس سامانه به‌صورت ثابت تنظیم شده است
   var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxJzZ8RzRL6wZ8MEpKiSYla4o0qhsrQfjkV01x04KRfme2nloWfrBTP2wY7yU3XNEWFng/exec';
-  var currentUser = null; // { username, password, fullName }
+  var currentUser = null;
   var currentProduct = null;
   var html5QrCode = null;
   var isScanning = false;
@@ -164,7 +136,6 @@
     return fetch(url).then(function (res) { return res.json(); });
   }
 
-  /* ---------------- ورود / خروج ---------------- */
   function doLogin() {
     var u = document.getElementById('username').value.trim();
     var p = document.getElementById('password').value.trim();
@@ -195,7 +166,6 @@
     document.getElementById('password').value = '';
   }
 
-  /* ---------------- جستجوی نام/کد کالا با لیست کشویی ---------------- */
   var allProducts = [];
 
   function productLabel(p) {
@@ -240,7 +210,6 @@
     }
   });
 
-  /* ---------------- استعلام ---------------- */
   function renderInquiryResult(res) {
     var box = document.getElementById('inquiryResult');
     var countsBox = document.getElementById('countsBox');
@@ -293,7 +262,6 @@
       });
   }
 
-  /* ---------------- شمارش کالا (ویرایش مستقیم شمارش + افزودن مقدار جدید) ---------------- */
   var lastSaved = { 1: 0, 2: 0, 3: 0 };
 
   function updateSavedInfo(n) {
@@ -375,29 +343,13 @@
     });
   });
 
-
-  /* ---------------- اسکنر دوربین (برای شناسایی بارکد کالا) ----------------
-   * موتور تشخیص: همیشه از کتابخانه‌ی barcode-detector با موتور ZXing وب‌اسمبلی استفاده
-   * می‌شود (window.BarcodeDetectionAPI.BarcodeDetector) — نه از BarcodeDetector بومی گوشی،
-   * حتی اگر گوشی آن را داشته باشد. دلیل: BarcodeDetector بومیِ اندروید به یک ماژول
-   * گوگل‌پلی‌سرویسز وابسته است که روی بعضی گوشی‌ها/مناطق دانلود یا فعال نمی‌شود؛ در آن حالت
-   * تابع تشخیص هیچ خطایی نمی‌دهد ولی همیشه لیست خالی برمی‌گرداند. موتور وب‌اسمبلی کاملاً
-   * مستقل از گوگل است و روی همه‌ی گوشی‌ها یکسان کار می‌کند. html5-qrcode فقط پشتیبان نهایی
-   * است، برای وقتی که به هر دلیل کتابخانه‌ی بالا اصلاً بارگذاری نشود.
-   *
-   * برای بارکدهای بسیار ریز (مثل لوازم‌التحریر) دو ترفند اضافه هم اعمال شده:
-   * ۱) بزرگ‌نمایی سخت‌افزاری دوربین، روی گوشی‌هایی که پشتیبانی می‌کنند (اسلایدر زیر تصویر).
-   * ۲) بزرگ‌نمایی دیجیتال خودکار: اگر بارکد در نگاه اول تشخیص داده نشود، ناحیه‌ی داخل کادر
-   *    سبز برش خورده، بزرگ می‌شود و دوباره روی همان ناحیه تشخیص اجرا می‌شود.
-   */
   var mediaStream = null;
   var videoTrack = null;
   var barcodeDetector = null;
   var scanTimerId = null;
-  var usingDetectorApi = false; // true = از موتور BarcodeDetector استفاده می‌شود
+  var usingDetectorApi = false;
   var torchOn = false;
 
-  // نسبت‌های کادر راهنما (هم برای نمایش کادر سبز و هم برای برش بزرگ‌نمایی/شمارش استفاده می‌شود)
   var GUIDE_X = 0.06;
   var GUIDE_TOP = 0.30;
   var GUIDE_BOTTOM = 0.30;
@@ -414,8 +366,6 @@
     startScanner(reader);
   }
 
-  // کلاس BarcodeDetector را برمی‌گرداند: همیشه اول نسخه‌ی وب‌اسمبلیِ مستقل از گوگل را
-  // برمی‌دارد؛ فقط اگر آن اصلاً بارگذاری نشده باشد، به نسخه‌ی بومی مرورگر (اگر باشد) برمی‌گردد.
   function getDetectorClass() {
     if (window.BarcodeDetectionAPI && window.BarcodeDetectionAPI.BarcodeDetector) {
       return window.BarcodeDetectionAPI.BarcodeDetector;
@@ -475,14 +425,13 @@
       '<div id="scannerWrap" style="position:relative; border-radius:8px; overflow:hidden; background:#000;">' +
         '<video id="scannerVideo" playsinline autoplay muted style="width:100%; display:block;"></video>' +
         '<div style="position:absolute; left:' + (GUIDE_X * 100) + '%; right:' + (GUIDE_X * 100) + '%; top:' + (GUIDE_TOP * 100) + '%; bottom:' + (GUIDE_BOTTOM * 100) + '%; border:3px solid #22c55e; border-radius:10px; box-shadow:0 0 0 2000px rgba(0,0,0,.35); pointer-events:none;"></div>' +
-        '<canvas id="countOverlay" style="position:absolute; left:' + (GUIDE_X * 100) + '%; right:' + (GUIDE_X * 100) + '%; top:' + (GUIDE_TOP * 100) + '%; bottom:' + (GUIDE_BOTTOM * 100) + '%; width:' + (100 - GUIDE_X * 200) + '%; height:' + (100 - GUIDE_TOP * 100 - GUIDE_BOTTOM * 100) + '%; pointer-events:none;"></canvas>' +
         '<button type="button" id="torchBtn" class="hidden" style="position:absolute; bottom:10px; left:10px; width:auto; margin:0; padding:8px 12px; background:rgba(0,0,0,.55); font-size:18px; border-radius:6px;">🔦</button>' +
       '</div>' +
       '<div id="zoomRow" class="hidden" style="display:flex; align-items:center; gap:8px; margin-top:8px;">' +
         '<span style="font-size:12px; color:#555; white-space:nowrap;">🔍 بزرگ‌نمایی</span>' +
         '<input type="range" id="zoomRange" min="1" max="2" step="0.1" value="1" style="flex:1;">' +
       '</div>' +
-      '<p style="font-size:12px; color:#888; text-align:center; margin:6px 0 0;">کالا را داخل کادر سبز و نزدیک دوربین نگه دارید</p>';
+      '<p style="font-size:12px; color:#888; text-align:center; margin:6px 0 0;">برای بارکدهای ریز، آن را داخل کادر سبز و نزدیک دوربین نگه دارید</p>';
   }
 
   function runDetectionLoop(video) {
@@ -543,7 +492,7 @@
       zoomRange.oninput = function () {
         videoTrack.applyConstraints({ advanced: [{ zoom: Number(zoomRange.value) }] }).catch(function () {});
       };
-    } catch (e) { /* بزرگ‌نمایی سخت‌افزاری در دسترس نیست */ }
+    } catch (e) { }
   }
 
   function setupTorchControl() {
@@ -559,10 +508,9 @@
         videoTrack.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(function () {});
         torchBtn.style.background = torchOn ? 'rgba(250,204,21,.9)' : 'rgba(0,0,0,.55)';
       };
-    } catch (e) { /* چراغ‌قوه در دسترس نیست */ }
+    } catch (e) { }
   }
 
-  /* --- پشتیبان نهایی: کتابخانه‌ی html5-qrcode (فقط وقتی BarcodeDetector اصلاً در دسترس نیست) --- */
   function startHtml5QrcodeScanner(reader) {
     if (typeof Html5Qrcode === 'undefined') {
       alert('کتابخانه اسکنر بارگذاری نشده. اتصال اینترنت را بررسی کنید.');
@@ -623,8 +571,6 @@
   function stopScannerIfRunning() {
     isScanning = false;
     if (scanTimerId) { clearInterval(scanTimerId); scanTimerId = null; }
-    if (objectCountTimer) { clearInterval(objectCountTimer); objectCountTimer = null; }
-    objectCountMode = false;
     if (mediaStream) {
       mediaStream.getTracks().forEach(function (t) { t.stop(); });
       mediaStream = null;
@@ -636,247 +582,6 @@
     var reader = document.getElementById('reader');
     reader.classList.add('hidden');
     reader.innerHTML = '';
-  }
-
-  /* ---------------- شمارش تعداد کالا با تحلیل تصویر دوربین (بدون تشخیص بارکد) ----------------
-   * این حالت فقط بعد از شناسایی کالا (از طریق بارکد) فعال می‌شود. کاربر چند نمونه از همان
-   * کالا (مثلاً چند خودکار) را زیر دوربین می‌گیرد و برنامه با تحلیل تصویرِ داخل کادر سبز،
-   * تعداد اشیاء مجزا (لکه‌های تیره/روشن جدا از پس‌زمینه) را می‌شمارد و به‌صورت زنده نمایش
-   * می‌دهد. کاربر با دکمه «ثبت این تعداد» عدد نهایی را تایید و به یکی از سه شمارش اضافه
-   * می‌کند.
-   *
-   * الگوریتم: تبدیل به سطح خاکستری → آستانه‌گذاری خودکار (Otsu) → پیدا کردن اجزای همبند
-   * (flood fill) → فیلتر بر اساس اندازه برای حذف نویز و پس‌زمینه. دقتش به نور یکنواخت و
-   * فاصله‌ی مناسب اشیاء از هم بستگی دارد.
-   */
-  var objectCountMode = false;
-  var objectCountTimer = null;
-  var liveObjectCount = 0;
-  var countCropCanvas = document.createElement('canvas');
-  var countCropCtx = countCropCanvas.getContext('2d', { willReadFrequently: true });
-
-  function startObjectCounting() {
-    if (!currentProduct) return;
-    if (isScanning) stopScannerIfRunning();
-
-    var reader = document.getElementById('reader');
-    reader.classList.remove('hidden');
-    reader.innerHTML = '<p style="text-align:center; color:#888;">در حال باز کردن دوربین...</p>';
-
-    document.getElementById('countLiveBox').classList.remove('hidden');
-    document.getElementById('countLiveProductName').innerText = 'در حال شمارش: ' + (currentProduct.productName || '');
-    document.getElementById('countLiveDisplay').innerText = '0';
-    document.getElementById('tallyAssignBox').classList.add('hidden');
-    liveObjectCount = 0;
-
-    navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: "environment" },
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-        advanced: [{ focusMode: "continuous" }]
-      }
-    })
-      .then(function (stream) {
-        mediaStream = stream;
-        videoTrack = stream.getVideoTracks()[0];
-        buildScannerUI(reader);
-        var video = document.getElementById('scannerVideo');
-        video.srcObject = stream;
-        return video.play().then(function () { return video; });
-      })
-      .then(function (video) {
-        usingDetectorApi = true;
-        isScanning = true;
-        objectCountMode = true;
-        setupZoomControl();
-        setupTorchControl();
-        runCountingLoop(video);
-      })
-      .catch(function (err) {
-        reader.classList.add('hidden');
-        reader.innerHTML = '';
-        document.getElementById('countLiveBox').classList.add('hidden');
-        alert('دسترسی به دوربین ممکن نشد: ' + (err && err.message ? err.message : err));
-      });
-  }
-
-  function runCountingLoop(video) {
-    var busy = false;
-    objectCountTimer = setInterval(function () {
-      if (!isScanning || !objectCountMode || busy || video.readyState < 2) return;
-      busy = true;
-      try {
-        liveObjectCount = countObjectsFromVideo(video);
-        document.getElementById('countLiveDisplay').innerText = liveObjectCount;
-      } catch (e) { /* یک فریم ناموفق نباید حلقه را متوقف کند */ }
-      busy = false;
-    }, 400);
-  }
-
-  function countObjectsFromVideo(video) {
-    var vw = video.videoWidth, vh = video.videoHeight;
-    if (!vw || !vh) return 0;
-
-    var cx = vw * GUIDE_X, cy = vh * GUIDE_TOP;
-    var cw = vw * (1 - GUIDE_X * 2);
-    var ch = vh * (1 - GUIDE_TOP - GUIDE_BOTTOM);
-    if (cw <= 0 || ch <= 0) return 0;
-
-    var targetW = 220; // برای سرعت، تصویر کوچک تحلیل می‌شود
-    var scale = targetW / cw;
-    countCropCanvas.width = targetW;
-    countCropCanvas.height = Math.max(1, Math.round(ch * scale));
-    countCropCtx.drawImage(video, cx, cy, cw, ch, 0, 0, countCropCanvas.width, countCropCanvas.height);
-
-    var result = countObjectsInCanvas(countCropCanvas);
-    drawCountOverlay(result.blobs, countCropCanvas.width, countCropCanvas.height);
-    return result.count;
-  }
-
-  function drawCountOverlay(blobs, w, h) {
-    var overlay = document.getElementById('countOverlay');
-    if (!overlay) return;
-    overlay.width = w;
-    overlay.height = h;
-    var octx = overlay.getContext('2d');
-    octx.clearRect(0, 0, w, h);
-    octx.lineWidth = Math.max(2, Math.round(w / 90));
-    octx.strokeStyle = '#facc15';
-    octx.fillStyle = 'rgba(250, 204, 21, 0.85)';
-    octx.font = 'bold ' + Math.max(11, Math.round(w / 20)) + 'px Tahoma, Arial, sans-serif';
-    octx.textAlign = 'center';
-    blobs.forEach(function (b, idx) {
-      octx.beginPath();
-      octx.arc(b.cx, b.cy, b.r, 0, Math.PI * 2);
-      octx.stroke();
-      octx.beginPath();
-      octx.arc(b.cx, b.cy - b.r - 10, 9, 0, Math.PI * 2);
-      octx.fill();
-      octx.fillStyle = '#1e293b';
-      octx.fillText(String(idx + 1), b.cx, b.cy - b.r - 6);
-      octx.fillStyle = 'rgba(250, 204, 21, 0.85)';
-    });
-  }
-
-  function countObjectsInCanvas(canvas) {
-    var ctx = canvas.getContext('2d', { willReadFrequently: true });
-    var w = canvas.width, h = canvas.height;
-    if (w < 2 || h < 2) return { count: 0, blobs: [] };
-    var imgData = ctx.getImageData(0, 0, w, h);
-    var data = imgData.data;
-    var n = w * h;
-
-    // تبدیل به سطح خاکستری
-    var gray = new Uint8ClampedArray(n);
-    for (var i = 0, j = 0; i < data.length; i += 4, j++) {
-      gray[j] = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) | 0;
-    }
-
-    // آستانه‌گذاری خودکار (روش Otsu)
-    var hist = new Array(256).fill(0);
-    for (var k = 0; k < n; k++) hist[gray[k]]++;
-    var sumAll = 0;
-    for (var t = 0; t < 256; t++) sumAll += t * hist[t];
-    var sumB = 0, wB = 0, wF = 0, varMax = 0, threshold = 127;
-    for (t = 0; t < 256; t++) {
-      wB += hist[t];
-      if (wB === 0) continue;
-      wF = n - wB;
-      if (wF === 0) break;
-      sumB += t * hist[t];
-      var mB = sumB / wB, mF = (sumAll - sumB) / wF;
-      var varBetween = wB * wF * (mB - mF) * (mB - mF);
-      if (varBetween > varMax) { varMax = varBetween; threshold = t; }
-    }
-
-    // تشخیص اینکه اشیاء (اقلیت پیکسل‌ها) تیره‌تر هستند یا روشن‌تر از پس‌زمینه
-    var below = 0;
-    for (k = 0; k < n; k++) if (gray[k] < threshold) below++;
-    var objectIsDark = below < n / 2;
-
-    var binary = new Uint8Array(n);
-    for (k = 0; k < n; k++) {
-      var isObj = objectIsDark ? (gray[k] < threshold) : (gray[k] >= threshold);
-      binary[k] = isObj ? 1 : 0;
-    }
-
-    // شمارش اجزای همبند (flood fill) با فیلتر اندازه برای حذف نویز
-    var visited = new Uint8Array(n);
-    var minArea = Math.max(15, Math.floor(n * 0.0015));
-    var maxArea = Math.floor(n * 0.35);
-    var blobs = [];
-    var stack = [];
-
-    for (var y = 0; y < h; y++) {
-      for (var x = 0; x < w; x++) {
-        var idx = y * w + x;
-        if (binary[idx] && !visited[idx]) {
-          var area = 0;
-          var minX = x, maxX = x, minY = y, maxY = y;
-          stack.push(idx);
-          visited[idx] = 1;
-          while (stack.length) {
-            var cur = stack.pop();
-            area++;
-            var cx2 = cur % w, cy2 = (cur - cx2) / w;
-            if (cx2 < minX) minX = cx2;
-            if (cx2 > maxX) maxX = cx2;
-            if (cy2 < minY) minY = cy2;
-            if (cy2 > maxY) maxY = cy2;
-            if (cx2 > 0) { var l = cur - 1; if (binary[l] && !visited[l]) { visited[l] = 1; stack.push(l); } }
-            if (cx2 < w - 1) { var r = cur + 1; if (binary[r] && !visited[r]) { visited[r] = 1; stack.push(r); } }
-            if (cy2 > 0) { var u = cur - w; if (binary[u] && !visited[u]) { visited[u] = 1; stack.push(u); } }
-            if (cy2 < h - 1) { var d = cur + w; if (binary[d] && !visited[d]) { visited[d] = 1; stack.push(d); } }
-          }
-          if (area >= minArea && area <= maxArea) {
-            var bw = maxX - minX + 1, bh = maxY - minY + 1;
-            blobs.push({
-              cx: minX + bw / 2,
-              cy: minY + bh / 2,
-              r: Math.max(bw, bh) / 2 + 2
-            });
-          }
-        }
-      }
-    }
-    return { count: blobs.length, blobs: blobs };
-  }
-
-  function finishObjectCounting() {
-    var finalCount = liveObjectCount;
-    stopScannerIfRunning();
-    document.getElementById('countLiveBox').classList.add('hidden');
-
-    if (!finalCount || finalCount < 1) {
-      alert('عددی شمارش نشد. لطفا دوباره امتحان کنید.');
-      return;
-    }
-    var box = document.getElementById('tallyAssignBox');
-    box.querySelector('.tallyCountText').innerText = 'تعداد شمارش‌شده با دوربین: ' + finalCount;
-    box.dataset.count = finalCount;
-    box.classList.remove('hidden');
-  }
-
-  function cancelObjectCounting() {
-    stopScannerIfRunning();
-    document.getElementById('countLiveBox').classList.add('hidden');
-    liveObjectCount = 0;
-  }
-
-  function assignTally(n) {
-    var box = document.getElementById('tallyAssignBox');
-    var count = Number(box.dataset.count || 0);
-    if (!count) return;
-    var newInput = document.getElementById('new' + n);
-    var current = newInput.value.trim() === '' ? 0 : Number(newInput.value.trim());
-    newInput.value = current + count;
-    newInput.dispatchEvent(new Event('input'));
-    box.classList.add('hidden');
-  }
-
-  function cancelTallyAssign() {
-    document.getElementById('tallyAssignBox').classList.add('hidden');
   }
 </script>
 </body>
