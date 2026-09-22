@@ -67,23 +67,13 @@
 <body>
 <div class="container">
 
-  <!-- تنظیم آدرس سامانه (فقط بار اول) -->
-  <div class="card" id="setupCard">
-    <h2>تنظیم اتصال به سامانه</h2>
-    <div id="setupMsg"></div>
-    <label>آدرس وب‌اپ (لینک نهایی Deploy که با exec/ تمام می‌شود)</label>
-    <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/XXXX/exec">
-    <button onclick="saveScriptUrl()">ذخیره و ادامه</button>
-  </div>
-
   <!-- ورود -->
-  <div class="card hidden" id="loginCard">
+  <div class="card" id="loginCard">
     <h2>ورود به سامانه</h2>
     <div id="loginMsg"></div>
     <input type="text" id="username" placeholder="نام کاربری">
     <input type="password" id="password" placeholder="رمز عبور">
     <button onclick="doLogin()">ورود</button>
-    <button class="secondary" onclick="showSetup()">تغییر آدرس سامانه</button>
   </div>
 
   <!-- استعلام -->
@@ -119,38 +109,13 @@
 </div>
 
 <script>
-  var SCRIPT_URL = localStorage.getItem('scriptUrl') || '';
+  // آدرس سامانه به‌صورت ثابت تنظیم شده است
+  var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxJzZ8RzRL6wZ8MEpKiSYla4o0qhsrQfjkV01x04KRfme2nloWfrBTP2wY7yU3XNEWFng/exec';
   var currentUser = null; // { username, password, fullName }
   var currentProduct = null;
   var html5QrCode = null;
   var isScanning = false;
   var resultClearTimer = null;
-
-  function init() {
-    if (SCRIPT_URL) {
-      document.getElementById('setupCard').classList.add('hidden');
-      document.getElementById('loginCard').classList.remove('hidden');
-    }
-  }
-  init();
-
-  function showSetup() {
-    document.getElementById('setupCard').classList.remove('hidden');
-    document.getElementById('loginCard').classList.add('hidden');
-    document.getElementById('scriptUrl').value = SCRIPT_URL;
-  }
-
-  function saveScriptUrl() {
-    var url = document.getElementById('scriptUrl').value.trim();
-    if (!url.startsWith('https://script.google.com/')) {
-      showMsg('setupMsg', 'آدرس معتبر نیست. باید لینک نهایی Deploy وب‌اپ باشد.', false);
-      return;
-    }
-    SCRIPT_URL = url;
-    localStorage.setItem('scriptUrl', url);
-    document.getElementById('setupCard').classList.add('hidden');
-    document.getElementById('loginCard').classList.remove('hidden');
-  }
 
   function showMsg(elId, text, ok) {
     document.getElementById(elId).innerHTML =
