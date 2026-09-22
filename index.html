@@ -4,7 +4,8 @@
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <title>اسکنر بارکد - سامانه انبارگردانی نمایشگاه ایران نوشت</title>
+  <title>سامانه انبارگردانی نمایشگاه ایران نوشت</title>
+  <script src="https://www.gstatic.com/charts/loader.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://fastly.jsdelivr.net/npm/barcode-detector@3/dist/iife/ponyfill.min.js"></script>
   <style>
@@ -17,7 +18,7 @@
       padding: 0;
       color: #222;
     }
-    .container { max-width: 500px; margin: 0 auto; padding: 16px; }
+    .container { max-width: 900px; margin: 0 auto; padding: 16px; width: 100%; }
     .card {
       background: #fff;
       border-radius: 10px;
@@ -25,104 +26,269 @@
       box-shadow: 0 1px 4px rgba(0,0,0,0.1);
       margin-bottom: 16px;
     }
-    h2 { margin-top: 0; text-align: center; }
-    input {
+    h2 { margin-top: 0; }
+    input, select {
       width: 100%;
-      padding: 12px;
+      padding: 10px;
       margin: 6px 0 14px 0;
       border: 1px solid #ccc;
       border-radius: 6px;
-      font-size: 16px;
+      font-size: 15px;
     }
     button {
       background: #2563eb;
       color: #fff;
       border: none;
-      padding: 12px 18px;
+      padding: 10px 18px;
       border-radius: 6px;
       cursor: pointer;
       font-size: 15px;
-      width: 100%;
-      margin-bottom: 8px;
+      margin-left: 6px;
     }
     button.secondary { background: #6b7280; }
+    button.danger { background: #dc2626; }
+    button:hover { opacity: 0.9; }
     .hidden { display: none !important; }
-    #reader { width: 100%; margin: 10px auto; }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #1e293b;
+      color: #fff;
+      padding: 12px 20px;
+    }
+    .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+    .tab-btn { background: #e5e7eb; color: #111; flex: 1; }
+    .tab-btn.active { background: #2563eb; color: #fff; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #e2e2e2; padding: 8px; text-align: center; font-size: 14px; }
+    th { background: #f0f2f5; }
     .result-box { margin-top: 16px; padding: 16px; border-radius: 8px; text-align: center; font-size: 16px; }
     .result-found { background: #dcfce7; color: #166534; }
     .result-notfound { background: #fee2e2; color: #991b1b; }
     .msg { padding: 10px; border-radius: 6px; margin-bottom: 10px; }
     .msg-ok { background: #dcfce7; color: #166534; }
     .msg-err { background: #fee2e2; color: #991b1b; }
-    .flex { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
-    .flex > div { flex: 2; }
+    .flex { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px; flex-wrap: wrap; }
+    .flex > div { flex: 2; min-width: 140px; }
     .flex > div.btn-col { flex: 1; }
-    .flex button { width: 100%; margin: 6px 0 0 0; padding-left: 4px; padding-right: 4px; transition: background 0.2s; }
-    .flex button.pending { background: #f59e0b; }
-    .flex button.saved { background: #22c55e; }
+    .flex button { width: 100%; margin: 6px 0 0 0; }
     label { font-size: 13px; color: #555; display: block; }
     .savedInfo { font-size: 11px; color: #888; font-weight: normal; }
+    #reader { width: 100%; max-width: 400px; margin: 10px auto; }
+    .progress-row { margin-bottom: 10px; }
+    .progress-outer { background: #e5e7eb; border-radius: 6px; overflow: hidden; height: 22px; width: 100%; }
+    .progress-inner { background: #22c55e; height: 100%; color: #fff; font-size: 12px; line-height: 22px; padding-right: 6px; white-space: nowrap; }
+
+    table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+
+    @media (max-width: 640px) {
+      .container { padding: 10px; }
+      .card { padding: 14px; border-radius: 8px; }
+      h2 { font-size: 18px; }
+      input, select { padding: 12px; font-size: 16px; }
+      button { width: 100%; margin-left: 0; margin-bottom: 8px; padding: 12px; font-size: 15px; }
+      .flex { flex-direction: column; gap: 6px; }
+      .flex button { width: 100%; }
+      .flex > div { width: 100%; }
+      .topbar { flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 14px; }
+      .topbar button { width: auto; padding: 8px 14px; }
+      .tabs { flex-direction: column; gap: 6px; }
+      .tab-btn { width: 100%; }
+      th, td { font-size: 12px; padding: 6px; }
+      .result-box { font-size: 15px; padding: 12px; }
+      .result-box span { font-size: 18px !important; }
+      #reader { max-width: 100%; }
+      #lineChart { height: 260px; }
+    }
+
+    .login-container { max-width: 400px; margin-top: 60px; }
+    @media (max-width: 640px) { .login-container { margin-top: 24px; } }
   </style>
 </head>
 <body>
-<div class="container">
 
-  <!-- ورود -->
-  <div class="card" id="loginCard">
-    <h2>ورود به سامانه</h2>
-    <div id="loginMsg"></div>
-    <input type="text" id="username" placeholder="نام کاربری">
-    <input type="password" id="password" placeholder="رمز عبور">
-    <button onclick="doLogin()">ورود</button>
+<!-- ===================== ورود ===================== -->
+<div id="loginView">
+  <div class="container login-container">
+    <div class="card">
+      <h2 style="text-align:center; margin-bottom:4px;">سامانه انبارگردانی نمایشگاه ایران نوشت</h2>
+      <p style="text-align:center; color:#666; margin-top:0;">ورود به سامانه</p>
+      <div id="loginMsg"></div>
+      <input type="text" id="loginUsername" placeholder="نام کاربری">
+      <input type="password" id="loginPassword" placeholder="رمز عبور"
+        onkeydown="if(event.key==='Enter'){event.preventDefault(); doLogin();}">
+      <button onclick="doLogin()" style="width:100%;">ورود</button>
+    </div>
   </div>
+</div>
 
-  <!-- استعلام -->
-  <div class="card hidden" id="mainCard">
-    <h2>استعلام بارکد | <span id="userFullName"></span></h2>
-
-    <label>جستجوی نام یا کد کالا</label>
-    <input type="text" id="productSearch" list="productListOptions" placeholder="نام یا کد کالا را تایپ یا از لیست انتخاب کنید">
-    <datalist id="productListOptions"></datalist>
-
-    <input type="text" id="manualBarcode" placeholder="بارکد را وارد یا اسکن کنید"
-      onkeydown="if(event.key==='Enter'){event.preventDefault(); submitInquiry();}">
-    <button onclick="toggleScanner()" id="scanBtn">📷 اسکن با دوربین</button>
-    <div id="reader" class="hidden"></div>
-    <button onclick="submitInquiry()">استعلام</button>
+<!-- ===================== پنل مدیر ===================== -->
+<div id="adminView" class="hidden">
+  <div class="topbar">
+    <div>سامانه انبارگردانی نمایشگاه ایران نوشت - پنل مدیریت | <span id="adminFullName"></span></div>
     <button class="secondary" onclick="logout()">خروج</button>
+  </div>
+  <div class="container">
+    <div class="tabs">
+      <button class="tab-btn active" id="tabScanBtn" onclick="showAdminTab('scan')">استعلام بارکد</button>
+      <button class="tab-btn" id="tabUsersBtn" onclick="showAdminTab('users')">مدیریت کاربران</button>
+      <button class="tab-btn" id="tabReportBtn" onclick="showAdminTab('report')">گزارش پیشرفت</button>
+      <button class="tab-btn" id="tabSuppliersBtn" onclick="showAdminTab('suppliers')">تامین‌کنندگان</button>
+    </div>
 
-    <div id="inquiryResult"></div>
+    <!-- تب استعلام (همان امکانات کاربر عادی، برای مدیر هم در دسترس) -->
+    <div id="scanTab" class="card">
+      <h2>استعلام بارکد</h2>
+      <label>جستجوی نام یا کد کالا</label>
+      <input type="text" id="productSearch" list="productListOptions" placeholder="نام یا کد کالا را تایپ یا از لیست انتخاب کنید">
+      <datalist id="productListOptions"></datalist>
 
-    <div id="countsBox" class="hidden" style="margin-top:14px; border-top:1px solid #eee; padding-top:14px;">
-      <h2 style="font-size:16px;">شمارش کالا</h2>
-      <div id="countMsg"></div>
-      <div class="flex">
-        <div><label>شمارش اول <span class="savedInfo" id="savedInfo1"></span></label><input type="number" id="count1" min="0" step="1"></div>
-        <div><label>مقدار جدید</label><input type="number" id="new1" min="0" step="1"></div>
-        <div class="btn-col"><label>&nbsp;</label><button id="saveBtn1" onclick="saveCount(1)">ذخیره</button></div>
+      <input type="text" id="manualBarcode" placeholder="بارکد را وارد یا اسکن کنید"
+        onkeydown="if(event.key==='Enter'){event.preventDefault(); submitInquiry();}">
+      <button onclick="toggleScanner()" id="scanBtn">📷 اسکن با دوربین</button>
+      <div id="reader" class="hidden"></div>
+      <button onclick="submitInquiry()">استعلام</button>
+
+      <div id="inquiryResult"></div>
+
+      <div id="countsBox" class="hidden" style="margin-top:14px; border-top:1px solid #eee; padding-top:14px;">
+        <h2 style="font-size:16px;">شمارش کالا</h2>
+        <div id="countMsg"></div>
+        <div class="flex">
+          <div><label>شمارش اول <span class="savedInfo" id="savedInfo1"></span></label><input type="number" id="count1" min="0" step="1"></div>
+          <div><label>مقدار جدید</label><input type="number" id="new1" min="0" step="1"></div>
+          <div class="btn-col"><label>&nbsp;</label><button id="saveBtn1" onclick="saveCount(1)">ذخیره</button></div>
+        </div>
+        <div class="flex">
+          <div><label>شمارش دوم <span class="savedInfo" id="savedInfo2"></span></label><input type="number" id="count2" min="0" step="1"></div>
+          <div><label>مقدار جدید</label><input type="number" id="new2" min="0" step="1"></div>
+          <div class="btn-col"><label>&nbsp;</label><button id="saveBtn2" onclick="saveCount(2)">ذخیره</button></div>
+        </div>
+        <div class="flex">
+          <div><label>شمارش سوم <span class="savedInfo" id="savedInfo3"></span></label><input type="number" id="count3" min="0" step="1"></div>
+          <div><label>مقدار جدید</label><input type="number" id="new3" min="0" step="1"></div>
+          <div class="btn-col"><label>&nbsp;</label><button id="saveBtn3" onclick="saveCount(3)">ذخیره</button></div>
+        </div>
       </div>
+    </div>
+
+    <!-- تب کاربران -->
+    <div id="usersTab" class="card hidden">
+      <h2 id="userFormTitle">افزودن کاربر جدید</h2>
+      <div id="userMsg"></div>
+      <input type="hidden" id="uOriginalUsername">
+      <input type="text" id="uFullName" placeholder="نام کاربر">
+      <input type="text" id="uUsername" placeholder="نام کاربری">
+      <input type="text" id="uPassword" placeholder="رمز عبور">
+      <select id="uRole">
+        <option value="user">کاربر عادی</option>
+        <option value="admin">مدیر</option>
+      </select>
       <div class="flex">
-        <div><label>شمارش دوم <span class="savedInfo" id="savedInfo2"></span></label><input type="number" id="count2" min="0" step="1"></div>
-        <div><label>مقدار جدید</label><input type="number" id="new2" min="0" step="1"></div>
-        <div class="btn-col"><label>&nbsp;</label><button id="saveBtn2" onclick="saveCount(2)">ذخیره</button></div>
+        <button onclick="submitUser()">ذخیره</button>
+        <button class="secondary" onclick="resetUserForm()">فرم جدید</button>
       </div>
-      <div class="flex">
-        <div><label>شمارش سوم <span class="savedInfo" id="savedInfo3"></span></label><input type="number" id="count3" min="0" step="1"></div>
-        <div><label>مقدار جدید</label><input type="number" id="new3" min="0" step="1"></div>
-        <div class="btn-col"><label>&nbsp;</label><button id="saveBtn3" onclick="saveCount(3)">ذخیره</button></div>
+      <table>
+        <thead><tr><th>نام کاربر</th><th>نام کاربری</th><th>نقش</th><th>عملیات</th></tr></thead>
+        <tbody id="usersTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- تب گزارش -->
+    <div id="reportTab" class="card hidden">
+      <h2>پیشرفت کلی</h2>
+      <div class="progress-row">
+        <div class="progress-outer"><div class="progress-inner" id="overallProgressBar" style="width:0%;">0%</div></div>
+      </div>
+      <p id="overallText"></p>
+
+      <h2>پیشرفت کلی شمارش‌ها</h2>
+      <div class="progress-row">
+        <div>شمارش اول</div>
+        <div class="progress-outer"><div class="progress-inner" id="count1OverallBar" style="width:0%; background:#3b82f6;">0%</div></div>
+      </div>
+      <div class="progress-row">
+        <div>شمارش دوم</div>
+        <div class="progress-outer"><div class="progress-inner" id="count2OverallBar" style="width:0%; background:#f59e0b;">0%</div></div>
+      </div>
+      <div class="progress-row">
+        <div>شمارش سوم</div>
+        <div class="progress-outer"><div class="progress-inner" id="count3OverallBar" style="width:0%; background:#a855f7;">0%</div></div>
+      </div>
+
+      <h2>پیشرفت به تفکیک تامین‌کننده</h2>
+      <div id="supplierProgressList"></div>
+
+      <h2>گزارش خطی تعداد استعلام به تفکیک کاربر</h2>
+      <div id="lineChart" style="width:100%; height:350px;"></div>
+    </div>
+
+    <!-- تب تامین‌کنندگان -->
+    <div id="suppliersTab" class="card hidden">
+      <h2>افزودن تامین‌کننده جدید</h2>
+      <div id="supplierMsg"></div>
+      <p style="font-size:13px; color:#666;">هر تامین‌کننده به صورت خودکار یک شیت با ستون‌های
+      «کد کالا، نام کالا، بارکد، موجودی» دریافت می‌کند و شماره‌ای بین 1 تا 20 به آن اختصاص می‌یابد.</p>
+      <input type="text" id="newSupplierName" placeholder="نام تامین‌کننده">
+      <button onclick="addSupplier()">ایجاد شیت تامین‌کننده</button>
+      <button class="secondary" onclick="fixMissingSheets()">ساخت شیت‌های گمشده از روی لیست Config</button>
+      <table>
+        <thead><tr><th>شماره</th><th>نام تامین‌کننده</th><th>عملیات</th></tr></thead>
+        <tbody id="suppliersTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== پنل کاربر عادی ===================== -->
+<div id="userView" class="hidden">
+  <div class="topbar">
+    <div>سامانه انبارگردانی نمایشگاه ایران نوشت | <span id="userFullName"></span></div>
+    <button class="secondary" onclick="logout()">خروج</button>
+  </div>
+  <div class="container">
+    <div class="card">
+      <h2>استعلام بارکد</h2>
+      <label>جستجوی نام یا کد کالا</label>
+      <input type="text" id="productSearchU" list="productListOptionsU" placeholder="نام یا کد کالا را تایپ یا از لیست انتخاب کنید">
+      <datalist id="productListOptionsU"></datalist>
+
+      <input type="text" id="manualBarcodeU" placeholder="بارکد را وارد یا اسکن کنید"
+        onkeydown="if(event.key==='Enter'){event.preventDefault(); submitInquiryU();}">
+      <button onclick="toggleScannerU()" id="scanBtnU">📷 اسکن با دوربین</button>
+      <div id="readerU" class="hidden"></div>
+      <button onclick="submitInquiryU()">استعلام</button>
+
+      <div id="inquiryResultU"></div>
+
+      <div id="countsBoxU" class="hidden" style="margin-top:14px; border-top:1px solid #eee; padding-top:14px;">
+        <h2 style="font-size:16px;">شمارش کالا</h2>
+        <div id="countMsgU"></div>
+        <div class="flex">
+          <div><label>شمارش اول <span class="savedInfo" id="savedInfo1U"></span></label><input type="number" id="count1U" min="0" step="1"></div>
+          <div><label>مقدار جدید</label><input type="number" id="new1U" min="0" step="1"></div>
+          <div class="btn-col"><label>&nbsp;</label><button id="saveBtn1U" onclick="saveCountU(1)">ذخیره</button></div>
+        </div>
+        <div class="flex">
+          <div><label>شمارش دوم <span class="savedInfo" id="savedInfo2U"></span></label><input type="number" id="count2U" min="0" step="1"></div>
+          <div><label>مقدار جدید</label><input type="number" id="new2U" min="0" step="1"></div>
+          <div class="btn-col"><label>&nbsp;</label><button id="saveBtn2U" onclick="saveCountU(2)">ذخیره</button></div>
+        </div>
+        <div class="flex">
+          <div><label>شمارش سوم <span class="savedInfo" id="savedInfo3U"></span></label><input type="number" id="count3U" min="0" step="1"></div>
+          <div><label>مقدار جدید</label><input type="number" id="new3U" min="0" step="1"></div>
+          <div class="btn-col"><label>&nbsp;</label><button id="saveBtn3U" onclick="saveCountU(3)">ذخیره</button></div>
+        </div>
       </div>
     </div>
   </div>
-
 </div>
 
 <script>
+  /* آدرس وب‌اپ اپ‌اسکریپت - فقط به عنوان بک‌اند API (JSON) استفاده می‌شود، نه رابط کاربری */
   var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxJzZ8RzRL6wZ8MEpKiSYla4o0qhsrQfjkV01x04KRfme2nloWfrBTP2wY7yU3XNEWFng/exec';
-  var currentUser = null;
-  var currentProduct = null;
-  var html5QrCode = null;
-  var isScanning = false;
-  var resultClearTimer = null;
+  var currentUser = null; // { username, password, fullName, role }
 
   function showMsg(elId, text, ok) {
     document.getElementById(elId).innerHTML =
@@ -131,24 +297,38 @@
 
   function apiCall(params) {
     var url = SCRIPT_URL + '?' + Object.keys(params).map(function (k) {
-      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k] === undefined || params[k] === null ? '' : params[k]);
     }).join('&');
     return fetch(url).then(function (res) { return res.json(); });
   }
 
+  function authParams(extra) {
+    var p = { username: currentUser.username, password: currentUser.password };
+    if (extra) for (var k in extra) p[k] = extra[k];
+    return p;
+  }
+
+  /* ---------------- ورود / خروج ---------------- */
   function doLogin() {
-    var u = document.getElementById('username').value.trim();
-    var p = document.getElementById('password').value.trim();
-    if (!u || !p) { showMsg('loginMsg', 'نام کاربری و رمز عبور را وارد کنید', false); return; }
+    var u = document.getElementById('loginUsername').value.trim();
+    var p = document.getElementById('loginPassword').value.trim();
     document.getElementById('loginMsg').innerHTML = '';
+    if (!u || !p) { showMsg('loginMsg', 'نام کاربری و رمز عبور را وارد کنید', false); return; }
 
     apiCall({ action: 'login', username: u, password: p }).then(function (res) {
       if (res.success) {
-        currentUser = { username: u, password: p, fullName: res.fullName };
-        document.getElementById('loginCard').classList.add('hidden');
-        document.getElementById('mainCard').classList.remove('hidden');
-        document.getElementById('userFullName').innerText = res.fullName;
-        loadProductList();
+        currentUser = { username: u, password: p, fullName: res.fullName, role: res.role };
+        document.getElementById('loginView').classList.add('hidden');
+        if (res.role === 'admin') {
+          document.getElementById('adminView').classList.remove('hidden');
+          document.getElementById('adminFullName').innerText = res.fullName;
+          showAdminTab('scan');
+          loadProductList();
+        } else {
+          document.getElementById('userView').classList.remove('hidden');
+          document.getElementById('userFullName').innerText = res.fullName;
+          loadProductListU();
+        }
       } else {
         showMsg('loginMsg', res.message || 'خطا در ورود', false);
       }
@@ -160,33 +340,239 @@
   function logout() {
     currentUser = null;
     stopScannerIfRunning();
-    document.getElementById('mainCard').classList.add('hidden');
-    document.getElementById('loginCard').classList.remove('hidden');
-    document.getElementById('username').value = '';
-    document.getElementById('password').value = '';
+    stopScannerIfRunningU();
+    document.getElementById('adminView').classList.add('hidden');
+    document.getElementById('userView').classList.add('hidden');
+    document.getElementById('loginView').classList.remove('hidden');
+    document.getElementById('loginUsername').value = '';
+    document.getElementById('loginPassword').value = '';
   }
+
+  /* ---------------- تب‌های پنل مدیر ---------------- */
+  function showAdminTab(tab) {
+    ['scan', 'users', 'report', 'suppliers'].forEach(function (t) {
+      document.getElementById(t + 'Tab').classList.toggle('hidden', t !== tab);
+      document.getElementById('tab' + capitalize(t) + 'Btn').classList.toggle('active', t === tab);
+    });
+    if (tab === 'users') loadUsers();
+    if (tab === 'report') loadReport();
+    if (tab === 'suppliers') loadSuppliers();
+  }
+  function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  /* ---------------- مدیریت کاربران ---------------- */
+  function loadUsers() {
+    apiCall(authParams({ action: 'listusers' })).then(function (res) {
+      if (!res.success) { showMsg('userMsg', res.message, false); return; }
+      var body = document.getElementById('usersTableBody');
+      body.innerHTML = '';
+      res.users.forEach(function (u) {
+        var tr = document.createElement('tr');
+        var editBtn = document.createElement('button');
+        editBtn.innerText = 'ویرایش';
+        editBtn.onclick = function () { editUser(u.username, u.fullName, u.password, u.role); };
+        var delBtn = document.createElement('button');
+        delBtn.className = 'danger';
+        delBtn.innerText = 'حذف';
+        delBtn.onclick = function () { removeUser(u.username); };
+
+        var tdName = document.createElement('td'); tdName.innerText = u.fullName;
+        var tdUser = document.createElement('td'); tdUser.innerText = u.username;
+        var tdRole = document.createElement('td'); tdRole.innerText = (u.role === 'admin' ? 'مدیر' : 'کاربر عادی');
+        var tdOps = document.createElement('td'); tdOps.appendChild(editBtn); tdOps.appendChild(delBtn);
+
+        tr.appendChild(tdName); tr.appendChild(tdUser); tr.appendChild(tdRole); tr.appendChild(tdOps);
+        body.appendChild(tr);
+      });
+    });
+  }
+
+  function resetUserForm() {
+    document.getElementById('userFormTitle').innerText = 'افزودن کاربر جدید';
+    document.getElementById('uOriginalUsername').value = '';
+    document.getElementById('uFullName').value = '';
+    document.getElementById('uUsername').value = '';
+    document.getElementById('uPassword').value = '';
+    document.getElementById('uRole').value = 'user';
+  }
+
+  function editUser(username, fullName, password, role) {
+    document.getElementById('userFormTitle').innerText = 'ویرایش کاربر: ' + fullName;
+    document.getElementById('uOriginalUsername').value = username;
+    document.getElementById('uFullName').value = fullName;
+    document.getElementById('uUsername').value = username;
+    document.getElementById('uPassword').value = password;
+    document.getElementById('uRole').value = role;
+  }
+
+  function submitUser() {
+    var original = document.getElementById('uOriginalUsername').value;
+    var fullName = document.getElementById('uFullName').value.trim();
+    var username = document.getElementById('uUsername').value.trim();
+    var password = document.getElementById('uPassword').value.trim();
+    var role = document.getElementById('uRole').value;
+    if (!fullName || !username || !password) {
+      showMsg('userMsg', 'تمام فیلدها الزامی است', false);
+      return;
+    }
+    apiCall(authParams({
+      action: 'saveuser',
+      isNew: !original,
+      originalUsername: original,
+      fullName: fullName,
+      newUsername: username,
+      newPassword: password,
+      role: role
+    })).then(function (res) {
+      showMsg('userMsg', res.message, res.success);
+      if (res.success) { resetUserForm(); loadUsers(); }
+    }).catch(function (err) { showMsg('userMsg', 'خطا در اتصال: ' + err, false); });
+  }
+
+  function removeUser(username) {
+    if (!confirm('آیا از حذف این کاربر مطمئن هستید؟')) return;
+    apiCall(authParams({ action: 'deleteuser', targetUsername: username })).then(function () {
+      loadUsers();
+    });
+  }
+
+  /* ---------------- تامین‌کنندگان ---------------- */
+  function loadSuppliers() {
+    apiCall(authParams({ action: 'listsuppliers' })).then(function (res) {
+      if (!res.success) return;
+      var body = document.getElementById('suppliersTableBody');
+      body.innerHTML = '';
+      res.suppliers.forEach(function (s) {
+        var tr = document.createElement('tr');
+        var editBtn = document.createElement('button');
+        editBtn.innerText = 'ویرایش نام';
+        editBtn.onclick = function () { renameSupplierPrompt(s.name); };
+        var tdNum = document.createElement('td'); tdNum.innerText = s.number;
+        var tdName = document.createElement('td'); tdName.innerText = s.name;
+        var tdOps = document.createElement('td'); tdOps.appendChild(editBtn);
+        tr.appendChild(tdNum); tr.appendChild(tdName); tr.appendChild(tdOps);
+        body.appendChild(tr);
+      });
+    });
+  }
+
+  function addSupplier() {
+    var name = document.getElementById('newSupplierName').value.trim();
+    if (!name) { showMsg('supplierMsg', 'نام تامین‌کننده را وارد کنید', false); return; }
+    apiCall(authParams({ action: 'addsupplier', supplierName: name })).then(function (res) {
+      if (res.success) {
+        showMsg('supplierMsg', 'تامین‌کننده «' + res.supplier.name + '» با شماره ' + res.supplier.number + ' ایجاد شد', true);
+        document.getElementById('newSupplierName').value = '';
+        loadSuppliers();
+      } else {
+        showMsg('supplierMsg', res.message, false);
+      }
+    }).catch(function (err) { showMsg('supplierMsg', 'خطا در اتصال: ' + err, false); });
+  }
+
+  function renameSupplierPrompt(oldName) {
+    var newName = prompt('نام جدید تامین‌کننده را وارد کنید:', oldName);
+    if (!newName || newName.trim() === '' || newName.trim() === oldName) return;
+    apiCall(authParams({ action: 'renamesupplier', oldName: oldName, newName: newName.trim() })).then(function (res) {
+      if (res.success) {
+        showMsg('supplierMsg', 'نام تامین‌کننده به «' + res.supplier.name + '» تغییر کرد', true);
+        loadSuppliers();
+      } else {
+        showMsg('supplierMsg', res.message, false);
+      }
+    }).catch(function (err) { showMsg('supplierMsg', 'خطا در اتصال: ' + err, false); });
+  }
+
+  function fixMissingSheets() {
+    apiCall(authParams({ action: 'fixmissingsheets' })).then(function (res) {
+      if (res.created && res.created.length > 0) {
+        showMsg('supplierMsg', 'شیت‌های ساخته‌شده: ' + res.created.join('، '), true);
+      } else {
+        showMsg('supplierMsg', 'همه شیت‌های تامین‌کننده از قبل موجود بودند', true);
+      }
+      loadSuppliers();
+    }).catch(function (err) { showMsg('supplierMsg', 'خطا در اتصال: ' + err, false); });
+  }
+
+  /* ---------------- گزارش ---------------- */
+  google.charts.load('current', { packages: ['corechart', 'line'] });
+
+  function loadReport() {
+    apiCall(authParams({ action: 'getreport' })).then(function (resWrap) {
+      if (!resWrap.success) return;
+      var data = resWrap.data;
+      document.getElementById('overallProgressBar').style.width = data.overallPercent + '%';
+      document.getElementById('overallProgressBar').innerText = data.overallPercent + '%';
+      document.getElementById('overallText').innerText =
+        'تعداد کالاهای چک‌شده: ' + data.checkedAll + ' از ' + data.totalAll;
+
+      document.getElementById('count1OverallBar').style.width = data.count1OverallPercent + '%';
+      document.getElementById('count1OverallBar').innerText = data.count1OverallPercent + '%';
+      document.getElementById('count2OverallBar').style.width = data.count2OverallPercent + '%';
+      document.getElementById('count2OverallBar').innerText = data.count2OverallPercent + '%';
+      document.getElementById('count3OverallBar').style.width = data.count3OverallPercent + '%';
+      document.getElementById('count3OverallBar').innerText = data.count3OverallPercent + '%';
+
+      var list = document.getElementById('supplierProgressList');
+      list.innerHTML = '';
+      data.supplierReport.forEach(function (s) {
+        var row = document.createElement('div');
+        row.className = 'progress-row';
+        row.style.borderBottom = '1px solid #eee';
+        row.style.paddingBottom = '10px';
+        row.style.marginBottom = '12px';
+        row.innerHTML =
+          '<div style="font-weight:bold;">' + s.number + ' - ' + s.name + ' (استعلام: ' + s.checked + '/' + s.total + ')</div>' +
+          '<div class="progress-outer"><div class="progress-inner" style="width:' + s.percent + '%;">' + s.percent + '%</div></div>' +
+          '<div style="font-size:12px; margin-top:6px;">شمارش اول (' + s.count1 + '/' + s.total + ')</div>' +
+          '<div class="progress-outer"><div class="progress-inner" style="width:' + s.count1Percent + '%; background:#3b82f6;">' + s.count1Percent + '%</div></div>' +
+          '<div style="font-size:12px; margin-top:6px;">شمارش دوم (' + s.count2 + '/' + s.total + ')</div>' +
+          '<div class="progress-outer"><div class="progress-inner" style="width:' + s.count2Percent + '%; background:#f59e0b;">' + s.count2Percent + '%</div></div>' +
+          '<div style="font-size:12px; margin-top:6px;">شمارش سوم (' + s.count3 + '/' + s.total + ')</div>' +
+          '<div class="progress-outer"><div class="progress-inner" style="width:' + s.count3Percent + '%; background:#a855f7;">' + s.count3Percent + '%</div></div>';
+        list.appendChild(row);
+      });
+
+      drawLineChart(data);
+    });
+  }
+
+  function drawLineChart(data) {
+    var el = document.getElementById('lineChart');
+    if (!data.lineChartRows.length || !data.users.length) {
+      el.innerHTML = '<p style="color:#888;">هنوز داده‌ای برای نمایش وجود ندارد</p>';
+      return;
+    }
+    google.charts.setOnLoadCallback(function () {
+      var dataTable = new google.visualization.DataTable();
+      dataTable.addColumn('string', 'تاریخ');
+      data.users.forEach(function (u) { dataTable.addColumn('number', u); });
+      dataTable.addRows(data.lineChartRows);
+      var options = { legend: { position: 'bottom' }, curveType: 'function', chartArea: { width: '85%', height: '70%' } };
+      var chart = new google.visualization.LineChart(el);
+      chart.draw(dataTable, options);
+    });
+  }
+
+  /* =======================================================================
+     استعلام بارکد + شمارش (نسخه مدیر: پسوند ندارد) و نسخه کاربر عادی (پسوند U)
+     ======================================================================= */
 
   var allProducts = [];
-
-  function productLabel(p) {
-    return (p.name || '') + ' (' + (p.code || '') + ')';
-  }
+  function productLabel(p) { return (p.name || '') + ' (' + (p.code || '') + ')'; }
 
   function loadProductList() {
-    if (!currentUser) return;
-    apiCall({ action: 'listproducts', username: currentUser.username, password: currentUser.password })
-      .then(function (res) {
-        if (!res.success) return;
-        allProducts = res.products || [];
-        var dl = document.getElementById('productListOptions');
-        dl.innerHTML = '';
-        allProducts.forEach(function (p) {
-          var opt = document.createElement('option');
-          opt.value = productLabel(p);
-          dl.appendChild(opt);
-        });
-      })
-      .catch(function () {});
+    apiCall(authParams({ action: 'listproducts' })).then(function (res) {
+      if (!res.success) return;
+      allProducts = res.products || [];
+      var dl = document.getElementById('productListOptions');
+      dl.innerHTML = '';
+      allProducts.forEach(function (p) {
+        var opt = document.createElement('option');
+        opt.value = productLabel(p);
+        dl.appendChild(opt);
+      });
+    }).catch(function () {});
   }
 
   function selectSearchedProduct() {
@@ -201,14 +587,16 @@
     document.getElementById('manualBarcode').value = firstBarcode;
     submitInquiry();
   }
-
   document.getElementById('productSearch').addEventListener('change', selectSearchedProduct);
   document.getElementById('productSearch').addEventListener('keydown', function (event) {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      selectSearchedProduct();
-    }
+    if (event.key === 'Enter') { event.preventDefault(); selectSearchedProduct(); }
   });
+
+  var lastSaved = { 1: 0, 2: 0, 3: 0 };
+  function updateSavedInfo(n) { document.getElementById('savedInfo' + n).innerText = '(' + lastSaved[n] + ')'; }
+
+  var resultClearTimer = null;
+  var currentProduct = null;
 
   function renderInquiryResult(res) {
     var box = document.getElementById('inquiryResult');
@@ -232,7 +620,7 @@
       [1, 2, 3].forEach(function (n) {
         document.getElementById('new' + n).value = '';
         var b = document.getElementById('saveBtn' + n);
-        b.classList.remove('pending', 'saved');
+        b.style.background = '';
         var cVal = document.getElementById('count' + n).value;
         lastSaved[n] = (cVal === '' || cVal === undefined) ? 0 : Number(cVal);
         updateSavedInfo(n);
@@ -250,36 +638,25 @@
   function submitInquiry() {
     var barcode = document.getElementById('manualBarcode').value.trim();
     if (!barcode || !currentUser) return;
-
-    apiCall({ action: 'lookup', username: currentUser.username, password: currentUser.password, barcode: barcode })
-      .then(function (res) {
-        renderInquiryResult(res);
-        document.getElementById('manualBarcode').value = '';
-        document.getElementById('manualBarcode').blur();
-      }).catch(function (err) {
-        document.getElementById('inquiryResult').innerHTML =
-          '<div class="result-box result-notfound">خطا در اتصال: ' + err + '</div>';
-      });
-  }
-
-  var lastSaved = { 1: 0, 2: 0, 3: 0 };
-
-  function updateSavedInfo(n) {
-    document.getElementById('savedInfo' + n).innerText =
-      '(' + lastSaved[n] + ')';
+    apiCall(authParams({ action: 'lookup', barcode: barcode })).then(function (res) {
+      renderInquiryResult(res);
+      document.getElementById('manualBarcode').value = '';
+      document.getElementById('manualBarcode').blur();
+    }).catch(function (err) {
+      document.getElementById('inquiryResult').innerHTML =
+        '<div class="result-box result-notfound">خطا در اتصال: ' + err + '</div>';
+    });
   }
 
   function saveCount(countNumber) {
     if (!currentProduct || !currentUser) return;
     var newInput = document.getElementById('new' + countNumber);
     var countInput = document.getElementById('count' + countNumber);
-    var btn = document.getElementById('saveBtn' + countNumber);
 
     var countRaw = countInput.value.toString().trim();
     var countNum;
-    if (countRaw === '') {
-      countNum = 0;
-    } else {
+    if (countRaw === '') { countNum = 0; }
+    else {
       countNum = Number(countRaw);
       if (!Number.isInteger(countNum) || countNum < 0) {
         showMsg('countMsg', 'مقدار باکس شمارش باید یک عدد صحیح مثبت باشد', false);
@@ -304,285 +681,370 @@
 
     var total = countNum + newNum;
 
-    apiCall({
+    apiCall(authParams({
       action: 'savecount',
-      username: currentUser.username,
-      password: currentUser.password,
       supplierName: currentProduct.supplierName,
       rowIndex: currentProduct.rowIndex,
       countNumber: countNumber,
       value: total
-    }).then(function (res) {
+    })).then(function (res) {
       showMsg('countMsg', res.message, res.success);
       if (res.success) {
         countInput.value = total;
         newInput.value = '';
         lastSaved[countNumber] = total;
         updateSavedInfo(countNumber);
-        btn.classList.remove('pending');
-        btn.classList.add('saved');
       }
-    }).catch(function (err) {
-      showMsg('countMsg', 'خطا در اتصال: ' + err, false);
-    });
+    }).catch(function (err) { showMsg('countMsg', 'خطا در اتصال: ' + err, false); });
   }
 
-  [1, 2, 3].forEach(function (n) {
-    var newInput = document.getElementById('new' + n);
-    var countInput = document.getElementById('count' + n);
-    var btn = document.getElementById('saveBtn' + n);
-
-    newInput.addEventListener('input', function () {
-      btn.classList.remove('saved');
-      btn.classList.add('pending');
-    });
-
-    countInput.addEventListener('input', function () {
-      btn.classList.remove('saved');
-      btn.classList.add('pending');
-    });
+  /* ---- نسخه کاربر عادی (پسوند U) ---- */
+  var allProductsU = [];
+  function loadProductListU() {
+    apiCall(authParams({ action: 'listproducts' })).then(function (res) {
+      if (!res.success) return;
+      allProductsU = res.products || [];
+      var dl = document.getElementById('productListOptionsU');
+      dl.innerHTML = '';
+      allProductsU.forEach(function (p) {
+        var opt = document.createElement('option');
+        opt.value = productLabel(p);
+        dl.appendChild(opt);
+      });
+    }).catch(function () {});
+  }
+  function selectSearchedProductU() {
+    var input = document.getElementById('productSearchU');
+    var val = input.value.trim();
+    if (!val) return;
+    var match = allProductsU.find(function (p) { return productLabel(p) === val; });
+    if (!match) return;
+    var firstBarcode = String(match.barcode || '').split(',')[0].trim();
+    if (!firstBarcode) return;
+    input.value = '';
+    document.getElementById('manualBarcodeU').value = firstBarcode;
+    submitInquiryU();
+  }
+  document.getElementById('productSearchU').addEventListener('change', selectSearchedProductU);
+  document.getElementById('productSearchU').addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') { event.preventDefault(); selectSearchedProductU(); }
   });
 
-  var mediaStream = null;
-  var videoTrack = null;
-  var barcodeDetector = null;
-  var scanTimerId = null;
-  var usingDetectorApi = false;
-  var torchOn = false;
+  var lastSavedU = { 1: 0, 2: 0, 3: 0 };
+  function updateSavedInfoU(n) { document.getElementById('savedInfo' + n + 'U').innerText = '(' + lastSavedU[n] + ')'; }
 
-  var GUIDE_X = 0.06;
-  var GUIDE_TOP = 0.30;
-  var GUIDE_BOTTOM = 0.30;
-  var ZOOM_SCALE = 2.2;
+  var resultClearTimerU = null;
+  var currentProductU = null;
 
-  var cropCanvas = document.createElement('canvas');
-  var cropCtx = cropCanvas.getContext('2d', { willReadFrequently: true });
+  function renderInquiryResultU(res) {
+    var box = document.getElementById('inquiryResultU');
+    var countsBox = document.getElementById('countsBoxU');
+    if (resultClearTimerU) { clearTimeout(resultClearTimerU); resultClearTimerU = null; }
 
-  function toggleScanner() {
-    if (isScanning) { stopScannerIfRunning(); return; }
-    var reader = document.getElementById('reader');
-    reader.classList.remove('hidden');
-    reader.innerHTML = '<p style="text-align:center; color:#888;">در حال باز کردن دوربین...</p>';
-    startScanner(reader);
+    if (res.found) {
+      box.innerHTML =
+        '<div class="result-box result-found">' +
+        '✅ تامین‌کننده: <b>' + res.supplierName + '</b><br>' +
+        'کد تامین‌کننده: <b>' + res.supplierNumber + '</b><br>' +
+        'نام کالا: ' + res.productName + '<br>' +
+        'کد کالا: ' + res.productCode + '<br>' +
+        'بارکد: ' + res.barcode + '<br>' +
+        '<span style="font-size:20px;">موجودی انبار: <b>' + res.stock + '</b></span>' +
+        '</div>';
+      currentProductU = { supplierName: res.supplierName, rowIndex: res.rowIndex, productName: res.productName };
+      document.getElementById('count1U').value = res.count1;
+      document.getElementById('count2U').value = res.count2;
+      document.getElementById('count3U').value = res.count3;
+      [1, 2, 3].forEach(function (n) {
+        document.getElementById('new' + n + 'U').value = '';
+        var cVal = document.getElementById('count' + n + 'U').value;
+        lastSavedU[n] = (cVal === '' || cVal === undefined) ? 0 : Number(cVal);
+        updateSavedInfoU(n);
+      });
+      document.getElementById('countMsgU').innerHTML = '';
+      countsBox.classList.remove('hidden');
+    } else {
+      box.innerHTML = '<div class="result-box result-notfound">❌ ' + res.message + '</div>';
+      currentProductU = null;
+      countsBox.classList.add('hidden');
+      resultClearTimerU = setTimeout(function () { box.innerHTML = ''; }, 3000);
+    }
   }
 
-  function getDetectorClass() {
-    if (window.BarcodeDetectionAPI && window.BarcodeDetectionAPI.BarcodeDetector) {
-      return window.BarcodeDetectionAPI.BarcodeDetector;
-    }
-    return window.BarcodeDetector;
+  function submitInquiryU() {
+    var barcode = document.getElementById('manualBarcodeU').value.trim();
+    if (!barcode || !currentUser) return;
+    apiCall(authParams({ action: 'lookup', barcode: barcode })).then(function (res) {
+      renderInquiryResultU(res);
+      document.getElementById('manualBarcodeU').value = '';
+      document.getElementById('manualBarcodeU').blur();
+    }).catch(function (err) {
+      document.getElementById('inquiryResultU').innerHTML =
+        '<div class="result-box result-notfound">خطا در اتصال: ' + err + '</div>';
+    });
   }
 
-  function startScanner(reader) {
-    var DetectorClass = getDetectorClass();
-    if (typeof DetectorClass === 'undefined') {
-      startHtml5QrcodeScanner(reader);
-      return;
-    }
+  function saveCountU(countNumber) {
+    if (!currentProductU || !currentUser) return;
+    var newInput = document.getElementById('new' + countNumber + 'U');
+    var countInput = document.getElementById('count' + countNumber + 'U');
 
-    var barcodeFormats = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'code_93', 'codabar', 'itf'];
-    try {
-      barcodeDetector = new DetectorClass({ formats: barcodeFormats });
-    } catch (e) {
-      console.warn('ساخت BarcodeDetector ناموفق بود:', e);
-      startHtml5QrcodeScanner(reader);
-      return;
-    }
-
-    navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: "environment" },
-        width: { ideal: 2560 },
-        height: { ideal: 1440 },
-        advanced: [{ focusMode: "continuous" }]
+    var countRaw = countInput.value.toString().trim();
+    var countNum;
+    if (countRaw === '') { countNum = 0; }
+    else {
+      countNum = Number(countRaw);
+      if (!Number.isInteger(countNum) || countNum < 0) {
+        showMsg('countMsgU', 'مقدار باکس شمارش باید یک عدد صحیح مثبت باشد', false);
+        return;
       }
-    })
-      .then(function (stream) {
-        mediaStream = stream;
-        videoTrack = stream.getVideoTracks()[0];
-        buildScannerUI(reader);
-        var video = document.getElementById('scannerVideo');
+    }
+
+    var newRaw = newInput.value.trim();
+    var newNum = 0;
+    if (newRaw !== '') {
+      newNum = Number(newRaw);
+      if (!Number.isInteger(newNum) || newNum < 0) {
+        showMsg('countMsgU', 'لطفا یک عدد صحیح مثبت در باکس «مقدار جدید» وارد کنید', false);
+        return;
+      }
+    }
+
+    if (newRaw === '' && countNum === lastSavedU[countNumber]) {
+      showMsg('countMsgU', 'تغییری برای ذخیره وجود ندارد', false);
+      return;
+    }
+
+    var total = countNum + newNum;
+
+    apiCall(authParams({
+      action: 'savecount',
+      supplierName: currentProductU.supplierName,
+      rowIndex: currentProductU.rowIndex,
+      countNumber: countNumber,
+      value: total
+    })).then(function (res) {
+      showMsg('countMsgU', res.message, res.success);
+      if (res.success) {
+        countInput.value = total;
+        newInput.value = '';
+        lastSavedU[countNumber] = total;
+        updateSavedInfoU(countNumber);
+      }
+    }).catch(function (err) { showMsg('countMsgU', 'خطا در اتصال: ' + err, false); });
+  }
+
+  /* =======================================================================
+     اسکنر دوربین - نسخه مدیر (بدون پسوند) و نسخه کاربر عادی (پسوند U)
+     منطق هر دو یکسان است، فقط روی المان‌های جدا کار می‌کنند.
+     ======================================================================= */
+  function makeScanner(cfg) {
+    var state = {
+      mediaStream: null, videoTrack: null, barcodeDetector: null,
+      scanTimerId: null, usingDetectorApi: false, torchOn: false, isScanning: false,
+      html5QrCode: null
+    };
+    var GUIDE_X = 0.06, GUIDE_TOP = 0.30, GUIDE_BOTTOM = 0.30, ZOOM_SCALE = 2.2;
+    var cropCanvas = document.createElement('canvas');
+    var cropCtx = cropCanvas.getContext('2d', { willReadFrequently: true });
+
+    function getDetectorClass() {
+      if (window.BarcodeDetectionAPI && window.BarcodeDetectionAPI.BarcodeDetector) {
+        return window.BarcodeDetectionAPI.BarcodeDetector;
+      }
+      return window.BarcodeDetector;
+    }
+
+    function toggle() {
+      if (state.isScanning) { stop(); return; }
+      var reader = document.getElementById(cfg.readerId);
+      reader.classList.remove('hidden');
+      reader.innerHTML = '<p style="text-align:center; color:#888;">در حال باز کردن دوربین...</p>';
+      start(reader);
+    }
+
+    function start(reader) {
+      var DetectorClass = getDetectorClass();
+      if (typeof DetectorClass === 'undefined') { startFallback(reader); return; }
+
+      var barcodeFormats = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'code_93', 'codabar', 'itf'];
+      try { state.barcodeDetector = new DetectorClass({ formats: barcodeFormats }); }
+      catch (e) { startFallback(reader); return; }
+
+      navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 2560 }, height: { ideal: 1440 }, advanced: [{ focusMode: "continuous" }] }
+      }).then(function (stream) {
+        state.mediaStream = stream;
+        state.videoTrack = stream.getVideoTracks()[0];
+        buildUI(reader);
+        var video = document.getElementById(cfg.readerId + '_video');
         video.srcObject = stream;
         return video.play().then(function () { return video; });
-      })
-      .then(function (video) {
-        usingDetectorApi = true;
-        isScanning = true;
-        setupZoomControl();
-        setupTorchControl();
-        runDetectionLoop(video);
-      })
-      .catch(function (err) {
-        console.warn('راه‌اندازی دوربین ناموفق بود:', err);
+      }).then(function (video) {
+        state.usingDetectorApi = true;
+        state.isScanning = true;
+        setupZoom();
+        setupTorch();
+        loop(video);
+      }).catch(function (err) {
         reader.classList.add('hidden');
         reader.innerHTML = '';
         alert('دسترسی به دوربین ممکن نشد یا دوربینی پیدا نشد: ' + (err && err.message ? err.message : err));
       });
-  }
-
-  function buildScannerUI(reader) {
-    reader.innerHTML =
-      '<div id="scannerWrap" style="position:relative; border-radius:8px; overflow:hidden; background:#000;">' +
-        '<video id="scannerVideo" playsinline autoplay muted style="width:100%; display:block;"></video>' +
-        '<div style="position:absolute; left:' + (GUIDE_X * 100) + '%; right:' + (GUIDE_X * 100) + '%; top:' + (GUIDE_TOP * 100) + '%; bottom:' + (GUIDE_BOTTOM * 100) + '%; border:3px solid #22c55e; border-radius:10px; box-shadow:0 0 0 2000px rgba(0,0,0,.35); pointer-events:none;"></div>' +
-        '<button type="button" id="torchBtn" class="hidden" style="position:absolute; bottom:10px; left:10px; width:auto; margin:0; padding:8px 12px; background:rgba(0,0,0,.55); font-size:18px; border-radius:6px;">🔦</button>' +
-      '</div>' +
-      '<div id="zoomRow" class="hidden" style="display:flex; align-items:center; gap:8px; margin-top:8px;">' +
-        '<span style="font-size:12px; color:#555; white-space:nowrap;">🔍 بزرگ‌نمایی</span>' +
-        '<input type="range" id="zoomRange" min="1" max="2" step="0.1" value="1" style="flex:1;">' +
-      '</div>' +
-      '<p style="font-size:12px; color:#888; text-align:center; margin:6px 0 0;">برای بارکدهای ریز، آن را داخل کادر سبز و نزدیک دوربین نگه دارید</p>';
-  }
-
-  function runDetectionLoop(video) {
-    var busy = false;
-    scanTimerId = setInterval(function () {
-      if (!isScanning || busy || video.readyState < 2) return;
-      busy = true;
-      try {
-        detectFrame(video).then(function (code) {
-          busy = false;
-          if (code) {
-            document.getElementById('manualBarcode').value = code;
-            stopScannerIfRunning();
-            submitInquiry();
-          }
-        }).catch(function () { busy = false; });
-      } catch (e) {
-        busy = false;
-      }
-    }, 180);
-  }
-
-  function detectFrame(video) {
-    var vw = video.videoWidth, vh = video.videoHeight;
-    if (!vw || !vh) return Promise.resolve(null);
-
-    return barcodeDetector.detect(video).then(function (codes) {
-      if (codes && codes.length) return codes[0].rawValue;
-
-      var cx = vw * GUIDE_X, cy = vh * GUIDE_TOP;
-      var cw = vw * (1 - GUIDE_X * 2);
-      var ch = vh * (1 - GUIDE_TOP - GUIDE_BOTTOM);
-      if (cw <= 0 || ch <= 0) return null;
-
-      cropCanvas.width = Math.round(cw * ZOOM_SCALE);
-      cropCanvas.height = Math.round(ch * ZOOM_SCALE);
-      cropCtx.drawImage(video, cx, cy, cw, ch, 0, 0, cropCanvas.width, cropCanvas.height);
-
-      return barcodeDetector.detect(cropCanvas).then(function (codes2) {
-        return (codes2 && codes2.length) ? codes2[0].rawValue : null;
-      });
-    });
-  }
-
-  function setupZoomControl() {
-    try {
-      var zoomRow = document.getElementById('zoomRow');
-      var zoomRange = document.getElementById('zoomRange');
-      if (!videoTrack || typeof videoTrack.getCapabilities !== 'function') return;
-      var caps = videoTrack.getCapabilities();
-      if (!caps.zoom) return;
-      zoomRange.min = caps.zoom.min;
-      zoomRange.max = caps.zoom.max;
-      zoomRange.step = caps.zoom.step || 0.1;
-      var settings = videoTrack.getSettings();
-      zoomRange.value = settings.zoom || caps.zoom.min;
-      zoomRow.classList.remove('hidden');
-      zoomRange.oninput = function () {
-        videoTrack.applyConstraints({ advanced: [{ zoom: Number(zoomRange.value) }] }).catch(function () {});
-      };
-    } catch (e) { }
-  }
-
-  function setupTorchControl() {
-    try {
-      var torchBtn = document.getElementById('torchBtn');
-      if (!videoTrack || typeof videoTrack.getCapabilities !== 'function') return;
-      var caps = videoTrack.getCapabilities();
-      if (!caps.torch) return;
-      torchOn = false;
-      torchBtn.classList.remove('hidden');
-      torchBtn.onclick = function () {
-        torchOn = !torchOn;
-        videoTrack.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(function () {});
-        torchBtn.style.background = torchOn ? 'rgba(250,204,21,.9)' : 'rgba(0,0,0,.55)';
-      };
-    } catch (e) { }
-  }
-
-  function startHtml5QrcodeScanner(reader) {
-    if (typeof Html5Qrcode === 'undefined') {
-      alert('کتابخانه اسکنر بارگذاری نشده. اتصال اینترنت را بررسی کنید.');
-      reader.classList.add('hidden');
-      return;
     }
-    usingDetectorApi = false;
 
-    navigator.mediaDevices.getUserMedia({ video: true }).then(function (stream) {
-      stream.getTracks().forEach(function (t) { t.stop(); });
-      html5QrCode = new Html5Qrcode("reader");
-      Html5Qrcode.getCameras().then(function (devices) {
-        if (!devices || devices.length === 0) {
-          alert('هیچ دوربینی پیدا نشد');
-          reader.classList.add('hidden');
-          return;
-        }
-        var chosen = devices.find(function (d) { return /back|rear|environment/i.test(d.label); }) || devices[0];
-        isScanning = true;
-        html5QrCode.start(chosen.id, {
-          fps: 15,
-          qrbox: { width: 300, height: 140 },
-          aspectRatio: 1.777778,
-          disableFlip: false,
-          formatsToSupport: [
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_93,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.CODABAR,
-            Html5QrcodeSupportedFormats.ITF
-          ],
-          videoConstraints: {
-            facingMode: "environment",
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            advanced: [{ focusMode: "continuous" }]
-          }
-        }, function (decodedText) {
-          document.getElementById('manualBarcode').value = decodedText;
-          stopScannerIfRunning();
-          submitInquiry();
-        }, function () {}).catch(function (err) {
-          alert('خطا در راه‌اندازی دوربین: ' + err);
-          isScanning = false;
-          reader.classList.add('hidden');
+    function buildUI(reader) {
+      reader.innerHTML =
+        '<div style="position:relative; border-radius:8px; overflow:hidden; background:#000;">' +
+          '<video id="' + cfg.readerId + '_video" playsinline autoplay muted style="width:100%; display:block;"></video>' +
+          '<div style="position:absolute; left:' + (GUIDE_X * 100) + '%; right:' + (GUIDE_X * 100) + '%; top:' + (GUIDE_TOP * 100) + '%; bottom:' + (GUIDE_BOTTOM * 100) + '%; border:3px solid #22c55e; border-radius:10px; box-shadow:0 0 0 2000px rgba(0,0,0,.35); pointer-events:none;"></div>' +
+          '<button type="button" id="' + cfg.readerId + '_torch" class="hidden" style="position:absolute; bottom:10px; left:10px; width:auto; margin:0; padding:8px 12px; background:rgba(0,0,0,.55); font-size:18px; border-radius:6px;">🔦</button>' +
+        '</div>' +
+        '<div id="' + cfg.readerId + '_zoomRow" class="hidden" style="display:flex; align-items:center; gap:8px; margin-top:8px;">' +
+          '<span style="font-size:12px; color:#555; white-space:nowrap;">🔍 بزرگ‌نمایی</span>' +
+          '<input type="range" id="' + cfg.readerId + '_zoom" min="1" max="2" step="0.1" value="1" style="flex:1;">' +
+        '</div>' +
+        '<p style="font-size:12px; color:#888; text-align:center; margin:6px 0 0;">برای بارکدهای ریز، آن را داخل کادر سبز و نزدیک دوربین نگه دارید</p>';
+    }
+
+    function loop(video) {
+      var busy = false;
+      state.scanTimerId = setInterval(function () {
+        if (!state.isScanning || busy || video.readyState < 2) return;
+        busy = true;
+        try {
+          detect(video).then(function (code) {
+            busy = false;
+            if (code) {
+              document.getElementById(cfg.inputId).value = code;
+              stop();
+              cfg.onDetected();
+            }
+          }).catch(function () { busy = false; });
+        } catch (e) { busy = false; }
+      }, 180);
+    }
+
+    function detect(video) {
+      var vw = video.videoWidth, vh = video.videoHeight;
+      if (!vw || !vh) return Promise.resolve(null);
+      return state.barcodeDetector.detect(video).then(function (codes) {
+        if (codes && codes.length) return codes[0].rawValue;
+        var cx = vw * GUIDE_X, cy = vh * GUIDE_TOP;
+        var cw = vw * (1 - GUIDE_X * 2), ch = vh * (1 - GUIDE_TOP - GUIDE_BOTTOM);
+        if (cw <= 0 || ch <= 0) return null;
+        cropCanvas.width = Math.round(cw * ZOOM_SCALE);
+        cropCanvas.height = Math.round(ch * ZOOM_SCALE);
+        cropCtx.drawImage(video, cx, cy, cw, ch, 0, 0, cropCanvas.width, cropCanvas.height);
+        return state.barcodeDetector.detect(cropCanvas).then(function (codes2) {
+          return (codes2 && codes2.length) ? codes2[0].rawValue : null;
         });
       });
-    }).catch(function (err) {
-      alert('اجازه دسترسی به دوربین داده نشد: ' + err);
+    }
+
+    function setupZoom() {
+      try {
+        var zoomRow = document.getElementById(cfg.readerId + '_zoomRow');
+        var zoomRange = document.getElementById(cfg.readerId + '_zoom');
+        if (!state.videoTrack || typeof state.videoTrack.getCapabilities !== 'function') return;
+        var caps = state.videoTrack.getCapabilities();
+        if (!caps.zoom) return;
+        zoomRange.min = caps.zoom.min; zoomRange.max = caps.zoom.max; zoomRange.step = caps.zoom.step || 0.1;
+        var settings = state.videoTrack.getSettings();
+        zoomRange.value = settings.zoom || caps.zoom.min;
+        zoomRow.classList.remove('hidden');
+        zoomRange.oninput = function () {
+          state.videoTrack.applyConstraints({ advanced: [{ zoom: Number(zoomRange.value) }] }).catch(function () {});
+        };
+      } catch (e) {}
+    }
+
+    function setupTorch() {
+      try {
+        var torchBtn = document.getElementById(cfg.readerId + '_torch');
+        if (!state.videoTrack || typeof state.videoTrack.getCapabilities !== 'function') return;
+        var caps = state.videoTrack.getCapabilities();
+        if (!caps.torch) return;
+        state.torchOn = false;
+        torchBtn.classList.remove('hidden');
+        torchBtn.onclick = function () {
+          state.torchOn = !state.torchOn;
+          state.videoTrack.applyConstraints({ advanced: [{ torch: state.torchOn }] }).catch(function () {});
+          torchBtn.style.background = state.torchOn ? 'rgba(250,204,21,.9)' : 'rgba(0,0,0,.55)';
+        };
+      } catch (e) {}
+    }
+
+    function startFallback(reader) {
+      if (typeof Html5Qrcode === 'undefined') {
+        alert('کتابخانه اسکنر بارگذاری نشده. اتصال اینترنت را بررسی کنید.');
+        reader.classList.add('hidden');
+        return;
+      }
+      state.usingDetectorApi = false;
+      navigator.mediaDevices.getUserMedia({ video: true }).then(function (stream) {
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        state.html5QrCode = new Html5Qrcode(cfg.readerId);
+        Html5Qrcode.getCameras().then(function (devices) {
+          if (!devices || devices.length === 0) { alert('هیچ دوربینی پیدا نشد'); reader.classList.add('hidden'); return; }
+          var chosen = devices.find(function (d) { return /back|rear|environment/i.test(d.label); }) || devices[0];
+          state.isScanning = true;
+          state.html5QrCode.start(chosen.id, {
+            fps: 15, qrbox: { width: 300, height: 140 }, aspectRatio: 1.777778, disableFlip: false,
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+              Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+              Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_93,
+              Html5QrcodeSupportedFormats.CODE_39, Html5QrcodeSupportedFormats.CODABAR,
+              Html5QrcodeSupportedFormats.ITF
+            ],
+            videoConstraints: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: "continuous" }] }
+          }, function (decodedText) {
+            document.getElementById(cfg.inputId).value = decodedText;
+            stop();
+            cfg.onDetected();
+          }, function () {}).catch(function (err) {
+            alert('خطا در راه‌اندازی دوربین: ' + err);
+            state.isScanning = false;
+            reader.classList.add('hidden');
+          });
+        });
+      }).catch(function (err) {
+        alert('اجازه دسترسی به دوربین داده نشد: ' + err);
+        reader.classList.add('hidden');
+      });
+    }
+
+    function stop() {
+      state.isScanning = false;
+      if (state.scanTimerId) { clearInterval(state.scanTimerId); state.scanTimerId = null; }
+      if (state.mediaStream) { state.mediaStream.getTracks().forEach(function (t) { t.stop(); }); state.mediaStream = null; }
+      state.videoTrack = null;
+      if (state.html5QrCode && state.usingDetectorApi === false) {
+        state.html5QrCode.stop().then(function () { state.html5QrCode.clear(); }).catch(function () {});
+      }
+      var reader = document.getElementById(cfg.readerId);
       reader.classList.add('hidden');
-    });
+      reader.innerHTML = '';
+    }
+
+    return { toggle: toggle, stop: stop };
   }
 
-  function stopScannerIfRunning() {
-    isScanning = false;
-    if (scanTimerId) { clearInterval(scanTimerId); scanTimerId = null; }
-    if (mediaStream) {
-      mediaStream.getTracks().forEach(function (t) { t.stop(); });
-      mediaStream = null;
-    }
-    videoTrack = null;
-    if (html5QrCode && usingDetectorApi === false) {
-      html5QrCode.stop().then(function () { html5QrCode.clear(); }).catch(function () {});
-    }
-    var reader = document.getElementById('reader');
-    reader.classList.add('hidden');
-    reader.innerHTML = '';
-  }
+  var scannerAdmin = makeScanner({ readerId: 'reader', inputId: 'manualBarcode', onDetected: submitInquiry });
+  var scannerUser = makeScanner({ readerId: 'readerU', inputId: 'manualBarcodeU', onDetected: submitInquiryU });
+
+  function toggleScanner() { scannerAdmin.toggle(); }
+  function stopScannerIfRunning() { scannerAdmin.stop(); }
+  function toggleScannerU() { scannerUser.toggle(); }
+  function stopScannerIfRunningU() { scannerUser.stop(); }
+
+  [1, 2, 3].forEach(function (n) {
+    document.getElementById('new' + n).addEventListener('input', function () {});
+    document.getElementById('count' + n).addEventListener('input', function () {});
+    document.getElementById('new' + n + 'U').addEventListener('input', function () {});
+    document.getElementById('count' + n + 'U').addEventListener('input', function () {});
+  });
 </script>
 </body>
 </html>
