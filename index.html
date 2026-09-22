@@ -6,6 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>اسکنر بارکد - سامانه انبارگردانی نمایشگاه ایران نوشت</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- موتور اصلیِ دقیق‌تر برای تشخیص بارکد: روی مرورگرهایی که BarcodeDetector بومی ندارند
+       (مثل سافاری/آیفون) به‌صورت خودکار از ZXing نسخه‌ی وب‌اسمبلی استفاده می‌کند -->
+  <script src="https://fastly.jsdelivr.net/npm/barcode-detector@3/dist/iife/polyfill.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -253,93 +256,189 @@
   }
 
   /* ---------------- اسکنر دوربین ----------------
-   * اولویت: موتور بومی تشخیص بارکد خود مرورگر (BarcodeDetector) — سریع‌تر و دقیق‌تر.
-   * در صورت عدم پشتیبانی مرورگر (مثلاً iOS/Safari) به کتابخانه html5-qrcode برمی‌گردیم.
+   * موتور تشخیص: کتابخانه‌ی barcode-detector (در <head> بارگذاری شده) یک پیاده‌سازی استاندارد
+   * از BarcodeDetector است: روی مرورگرهایی که خودشان این قابلیت را دارند (مثل کروم/اندروید)
+   * از همان موتور سریعِ بومی استفاده می‌کند، و روی مرورگرهایی که ندارند (مثل سافاری/آیفون)
+   * به‌طور خودکار به یک موتور دقیق‌تر مبتنی بر ZXing (وب‌اسمبلی) سوییچ می‌کند که برای
+   * بارکدهای میله‌ای (خطی) به‌خصوص در اندازه‌ی ریز، دقت به‌مراتب بهتری نسبت به کتابخانه‌ی
+   * قدیمی html5-qrcode دارد. html5-qrcode فقط به‌عنوان پشتیبان نهایی نگه داشته شده، برای
+   * زمانی که به هر دلیل (مثلاً قطعی اینترنت) کتابخانه‌ی جدید بارگذاری نشود.
+   *
+   * برای بارکدهای بسیار ریز (مثل لوازم‌التحریر) دو ترفند اضافه‌ی دیگر هم اعمال شده:
+   * ۱) بزرگ‌نمایی سخت‌افزاری دوربین، روی گوشی‌هایی که پشتیبانی می‌کنند (اسلایدر زیر تصویر).
+   * ۲) بزرگ‌نمایی دیجیتال خودکار: اگر بارکد در نگاه اول تشخیص داده نشود، ناحیه‌ی داخل کادر
+   *    سبز برش خورده، بزرگ می‌شود و دوباره روی همان ناحیه تشخیص اجرا می‌شود.
    */
   var mediaStream = null;
-  var nativeDetector = null;
+  var videoTrack = null;
+  var barcodeDetector = null;
   var scanTimerId = null;
-  var usingNative = false;
+  var usingDetectorApi = false; // true = از BarcodeDetector (بومی یا وب‌اسمبلی) استفاده می‌شود
+  var torchOn = false;
+
+  // نسبت‌های کادر راهنما (هم برای نمایش کادر سبز و هم برای برش بزرگ‌نمایی دیجیتال استفاده می‌شود)
+  var GUIDE_X = 0.06;
+  var GUIDE_TOP = 0.30;
+  var GUIDE_BOTTOM = 0.30;
+  var ZOOM_SCALE = 2.2;
+
+  var cropCanvas = document.createElement('canvas');
+  var cropCtx = cropCanvas.getContext('2d', { willReadFrequently: true });
 
   function toggleScanner() {
     if (isScanning) { stopScannerIfRunning(); return; }
     var reader = document.getElementById('reader');
     reader.classList.remove('hidden');
-    reader.innerHTML = '';
-
-    if ('BarcodeDetector' in window) {
-      startNativeScanner(reader);
-    } else {
-      startHtml5QrcodeScanner(reader);
-    }
+    reader.innerHTML = '<p style="text-align:center; color:#888;">در حال باز کردن دوربین...</p>';
+    startScanner(reader);
   }
 
-  /* --- روش اول: موتور بومی مرورگر --- */
-  function startNativeScanner(reader) {
+  function startScanner(reader) {
+    if (typeof BarcodeDetector === 'undefined') {
+      // کتابخانه‌ی موتور اصلی بارگذاری نشده (مثلاً قطعی اینترنت)؛ به پشتیبان نهایی می‌رویم
+      startHtml5QrcodeScanner(reader);
+      return;
+    }
+
     var barcodeFormats = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'code_93', 'codabar', 'itf'];
 
-    (BarcodeDetector.getSupportedFormats ? BarcodeDetector.getSupportedFormats() : Promise.resolve(barcodeFormats))
+    Promise.resolve(BarcodeDetector.getSupportedFormats ? BarcodeDetector.getSupportedFormats() : barcodeFormats)
       .then(function (supported) {
         var formats = barcodeFormats.filter(function (f) { return supported.indexOf(f) !== -1; });
-        nativeDetector = new BarcodeDetector({ formats: formats.length ? formats : barcodeFormats });
-
+        barcodeDetector = new BarcodeDetector({ formats: formats.length ? formats : barcodeFormats });
+      })
+      .catch(function () {
+        barcodeDetector = new BarcodeDetector({ formats: barcodeFormats });
+      })
+      .then(function () {
         return navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: "environment" },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
+            width: { ideal: 2560 },
+            height: { ideal: 1440 },
             advanced: [{ focusMode: "continuous" }]
           }
         });
       })
       .then(function (stream) {
         mediaStream = stream;
-        var video = document.createElement('video');
-        video.setAttribute('playsinline', 'true');
-        video.setAttribute('autoplay', 'true');
-        video.setAttribute('muted', 'true');
-        video.style.width = '100%';
-        video.style.borderRadius = '8px';
-        reader.appendChild(video);
+        videoTrack = stream.getVideoTracks()[0];
+        buildScannerUI(reader);
+        var video = document.getElementById('scannerVideo');
         video.srcObject = stream;
-
         return video.play().then(function () { return video; });
       })
       .then(function (video) {
-        usingNative = true;
+        usingDetectorApi = true;
         isScanning = true;
-        var scanning = false;
-
-        scanTimerId = setInterval(function () {
-          if (!isScanning || scanning) return;
-          scanning = true;
-          nativeDetector.detect(video).then(function (barcodes) {
-            scanning = false;
-            if (barcodes && barcodes.length > 0) {
-              var code = barcodes[0].rawValue;
-              document.getElementById('manualBarcode').value = code;
-              stopScannerIfRunning();
-              submitInquiry();
-            }
-          }).catch(function () { scanning = false; });
-        }, 150);
+        setupZoomControl();
+        setupTorchControl();
+        runDetectionLoop(video);
       })
       .catch(function (err) {
-        // اگر موتور بومی به هر دلیلی شکست خورد، به روش قدیمی برمی‌گردیم
-        console.warn('Native BarcodeDetector failed, falling back:', err);
+        console.warn('راه‌اندازی موتور تشخیص بارکد ناموفق بود:', err);
+        reader.classList.add('hidden');
         reader.innerHTML = '';
-        startHtml5QrcodeScanner(reader);
+        alert('دسترسی به دوربین ممکن نشد یا دوربینی پیدا نشد: ' + (err && err.message ? err.message : err));
       });
   }
 
-  /* --- روش دوم (پشتیبان): کتابخانه html5-qrcode --- */
+  function buildScannerUI(reader) {
+    reader.innerHTML =
+      '<div id="scannerWrap" style="position:relative; border-radius:8px; overflow:hidden; background:#000;">' +
+        '<video id="scannerVideo" playsinline autoplay muted style="width:100%; display:block;"></video>' +
+        '<div style="position:absolute; left:' + (GUIDE_X * 100) + '%; right:' + (GUIDE_X * 100) + '%; top:' + (GUIDE_TOP * 100) + '%; bottom:' + (GUIDE_BOTTOM * 100) + '%; border:3px solid #22c55e; border-radius:10px; box-shadow:0 0 0 2000px rgba(0,0,0,.35); pointer-events:none;"></div>' +
+        '<button type="button" id="torchBtn" class="hidden" style="position:absolute; bottom:10px; left:10px; width:auto; margin:0; padding:8px 12px; background:rgba(0,0,0,.55); font-size:18px; border-radius:6px;">🔦</button>' +
+      '</div>' +
+      '<div id="zoomRow" class="hidden" style="display:flex; align-items:center; gap:8px; margin-top:8px;">' +
+        '<span style="font-size:12px; color:#555; white-space:nowrap;">🔍 بزرگ‌نمایی</span>' +
+        '<input type="range" id="zoomRange" min="1" max="2" step="0.1" value="1" style="flex:1;">' +
+      '</div>' +
+      '<p style="font-size:12px; color:#888; text-align:center; margin:6px 0 0;">برای بارکدهای ریز، آن را داخل کادر سبز و نزدیک دوربین نگه دارید</p>';
+  }
+
+  function runDetectionLoop(video) {
+    var busy = false;
+    scanTimerId = setInterval(function () {
+      if (!isScanning || busy || video.readyState < 2) return;
+      busy = true;
+      detectFrame(video).then(function (code) {
+        busy = false;
+        if (code) {
+          document.getElementById('manualBarcode').value = code;
+          stopScannerIfRunning();
+          submitInquiry();
+        }
+      }).catch(function () { busy = false; });
+    }, 180);
+  }
+
+  function detectFrame(video) {
+    var vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return Promise.resolve(null);
+
+    return barcodeDetector.detect(video).then(function (codes) {
+      if (codes && codes.length) return codes[0].rawValue;
+
+      // بارکد در نگاه اول پیدا نشد؛ ناحیه‌ی داخل کادر راهنما را برش و بزرگ می‌کنیم (اجناس ریز)
+      var cx = vw * GUIDE_X, cy = vh * GUIDE_TOP;
+      var cw = vw * (1 - GUIDE_X * 2);
+      var ch = vh * (1 - GUIDE_TOP - GUIDE_BOTTOM);
+      if (cw <= 0 || ch <= 0) return null;
+
+      cropCanvas.width = Math.round(cw * ZOOM_SCALE);
+      cropCanvas.height = Math.round(ch * ZOOM_SCALE);
+      cropCtx.drawImage(video, cx, cy, cw, ch, 0, 0, cropCanvas.width, cropCanvas.height);
+
+      return barcodeDetector.detect(cropCanvas).then(function (codes2) {
+        return (codes2 && codes2.length) ? codes2[0].rawValue : null;
+      });
+    });
+  }
+
+  function setupZoomControl() {
+    try {
+      var zoomRow = document.getElementById('zoomRow');
+      var zoomRange = document.getElementById('zoomRange');
+      if (!videoTrack || typeof videoTrack.getCapabilities !== 'function') return;
+      var caps = videoTrack.getCapabilities();
+      if (!caps.zoom) return; // مثلاً سافاری/آیفون این قابلیت را ندارد
+      zoomRange.min = caps.zoom.min;
+      zoomRange.max = caps.zoom.max;
+      zoomRange.step = caps.zoom.step || 0.1;
+      var settings = videoTrack.getSettings();
+      zoomRange.value = settings.zoom || caps.zoom.min;
+      zoomRow.classList.remove('hidden');
+      zoomRange.oninput = function () {
+        videoTrack.applyConstraints({ advanced: [{ zoom: Number(zoomRange.value) }] }).catch(function () {});
+      };
+    } catch (e) { /* بزرگ‌نمایی سخت‌افزاری در دسترس نیست */ }
+  }
+
+  function setupTorchControl() {
+    try {
+      var torchBtn = document.getElementById('torchBtn');
+      if (!videoTrack || typeof videoTrack.getCapabilities !== 'function') return;
+      var caps = videoTrack.getCapabilities();
+      if (!caps.torch) return; // مثلاً سافاری/آیفون این قابلیت را ندارد
+      torchOn = false;
+      torchBtn.classList.remove('hidden');
+      torchBtn.onclick = function () {
+        torchOn = !torchOn;
+        videoTrack.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(function () {});
+        torchBtn.style.background = torchOn ? 'rgba(250,204,21,.9)' : 'rgba(0,0,0,.55)';
+      };
+    } catch (e) { /* چراغ‌قوه در دسترس نیست */ }
+  }
+
+  /* --- پشتیبان نهایی: کتابخانه‌ی html5-qrcode (فقط وقتی BarcodeDetector اصلاً در دسترس نیست) --- */
   function startHtml5QrcodeScanner(reader) {
     if (typeof Html5Qrcode === 'undefined') {
       alert('کتابخانه اسکنر بارگذاری نشده. اتصال اینترنت را بررسی کنید.');
       reader.classList.add('hidden');
       return;
     }
-    usingNative = false;
+    usingDetectorApi = false;
 
     navigator.mediaDevices.getUserMedia({ video: true }).then(function (stream) {
       stream.getTracks().forEach(function (t) { t.stop(); });
@@ -397,7 +496,8 @@
       mediaStream.getTracks().forEach(function (t) { t.stop(); });
       mediaStream = null;
     }
-    if (html5QrCode && usingNative === false) {
+    videoTrack = null;
+    if (html5QrCode && usingDetectorApi === false) {
       html5QrCode.stop().then(function () { html5QrCode.clear(); }).catch(function () {});
     }
     var reader = document.getElementById('reader');
