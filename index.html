@@ -89,6 +89,8 @@
     }
     .count-row .count-save.pending { background: #f59e0b; }
     .count-row .count-save.saved { background: #22c55e; }
+    .count-row .count-field input:disabled { background: #eee; color: #999; cursor: not-allowed; }
+    .count-row .count-save:disabled { background: #cbd5e1 !important; cursor: not-allowed; opacity: 0.8; }
     #reader { width: 100%; max-width: 400px; margin: 10px auto; }
     .progress-row { margin-bottom: 10px; }
     .progress-outer { background: #e5e7eb; border-radius: 6px; overflow: hidden; height: 22px; width: 100%; }
@@ -323,6 +325,37 @@
     var p = { username: currentUser.username, password: currentUser.password };
     if (extra) for (var k in extra) p[k] = extra[k];
     return p;
+  }
+
+  /* ---------------- کمکی‌های مشترک ردیف‌های شمارش (برای هر دو نسخه مدیر و کاربر) ---------------- */
+  function setCountRowEnabled(n, suffix, enabled) {
+    var count = document.getElementById('count' + n + suffix);
+    var newI = document.getElementById('new' + n + suffix);
+    var btn = document.getElementById('saveBtn' + n + suffix);
+    count.disabled = !enabled;
+    newI.disabled = !enabled;
+    btn.disabled = !enabled;
+  }
+
+  function updateCountLocks(suffix) {
+    var c1 = document.getElementById('count1' + suffix).value.toString().trim();
+    var c2 = document.getElementById('count2' + suffix).value.toString().trim();
+    setCountRowEnabled(2, suffix, c1 !== '');
+    setCountRowEnabled(3, suffix, c1 !== '' && c2 !== '');
+  }
+
+  function updateRowButtonState(n, suffix, lastSavedObj) {
+    var countRaw = document.getElementById('count' + n + suffix).value.toString().trim();
+    var newRaw = document.getElementById('new' + n + suffix).value.toString().trim();
+    var countNum = countRaw === '' ? 0 : Number(countRaw);
+    var unchanged = (countNum === lastSavedObj[n]) && newRaw === '';
+    var btn = document.getElementById('saveBtn' + n + suffix);
+    if (unchanged) {
+      btn.classList.remove('pending');
+    } else {
+      btn.classList.remove('saved');
+      btn.classList.add('pending');
+    }
   }
 
   /* ---------------- ورود / خروج ---------------- */
@@ -642,6 +675,7 @@
         lastSaved[n] = (cVal === '' || cVal === undefined) ? 0 : Number(cVal);
         updateSavedInfo(n);
       });
+      updateCountLocks('');
       document.getElementById('countMsg').innerHTML = '';
       countsBox.classList.remove('hidden');
     } else {
@@ -714,6 +748,7 @@
         var b = document.getElementById('saveBtn' + countNumber);
         b.classList.remove('pending');
         b.classList.add('saved');
+        updateCountLocks('');
       }
     }).catch(function (err) { showMsg('countMsg', 'خطا در اتصال: ' + err, false); });
   }
@@ -783,6 +818,7 @@
         lastSavedU[n] = (cVal === '' || cVal === undefined) ? 0 : Number(cVal);
         updateSavedInfoU(n);
       });
+      updateCountLocks('U');
       document.getElementById('countMsgU').innerHTML = '';
       countsBox.classList.remove('hidden');
     } else {
@@ -855,6 +891,7 @@
         var b = document.getElementById('saveBtn' + countNumber + 'U');
         b.classList.remove('pending');
         b.classList.add('saved');
+        updateCountLocks('U');
       }
     }).catch(function (err) { showMsg('countMsgU', 'خطا در اتصال: ' + err, false); });
   }
@@ -1065,19 +1102,21 @@
   function stopScannerIfRunningU() { scannerUser.stop(); }
 
   [1, 2, 3].forEach(function (n) {
-    var onChange = function () {
-      var b = document.getElementById('saveBtn' + n);
-      b.classList.remove('saved');
-      b.classList.add('pending');
-    };
+    var onChange = function (num) {
+      return function () {
+        updateRowButtonState(num, '', lastSaved);
+        if (num === 1 || num === 2) updateCountLocks('');
+      };
+    }(n);
     document.getElementById('new' + n).addEventListener('input', onChange);
     document.getElementById('count' + n).addEventListener('input', onChange);
 
-    var onChangeU = function () {
-      var b = document.getElementById('saveBtn' + n + 'U');
-      b.classList.remove('saved');
-      b.classList.add('pending');
-    };
+    var onChangeU = function (num) {
+      return function () {
+        updateRowButtonState(num, 'U', lastSavedU);
+        if (num === 1 || num === 2) updateCountLocks('U');
+      };
+    }(n);
     document.getElementById('new' + n + 'U').addEventListener('input', onChangeU);
     document.getElementById('count' + n + 'U').addEventListener('input', onChangeU);
   });
