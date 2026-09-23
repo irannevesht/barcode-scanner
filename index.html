@@ -337,11 +337,9 @@
     btn.disabled = !enabled;
   }
 
-  function updateCountLocks(suffix) {
-    var c1 = document.getElementById('count1' + suffix).value.toString().trim();
-    var c2 = document.getElementById('count2' + suffix).value.toString().trim();
-    setCountRowEnabled(2, suffix, c1 !== '');
-    setCountRowEnabled(3, suffix, c1 !== '' && c2 !== '');
+  function updateCountLocks(suffix, savedFlagObj) {
+    setCountRowEnabled(2, suffix, !!savedFlagObj[1]);
+    setCountRowEnabled(3, suffix, !!savedFlagObj[1] && !!savedFlagObj[2]);
   }
 
   function updateRowButtonState(n, suffix, lastSavedObj) {
@@ -643,6 +641,7 @@
   });
 
   var lastSaved = { 1: 0, 2: 0, 3: 0 };
+  var savedFlag = { 1: false, 2: false, 3: false };
   function updateSavedInfo(n) { document.getElementById('savedInfo' + n).innerText = '(' + lastSaved[n] + ')'; }
 
   var resultClearTimer = null;
@@ -672,10 +671,11 @@
         var b = document.getElementById('saveBtn' + n);
         b.classList.remove('pending', 'saved');
         var cVal = document.getElementById('count' + n).value;
-        lastSaved[n] = (cVal === '' || cVal === undefined) ? 0 : Number(cVal);
+        savedFlag[n] = (cVal !== '' && cVal !== undefined && cVal !== null);
+        lastSaved[n] = savedFlag[n] ? Number(cVal) : 0;
         updateSavedInfo(n);
       });
-      updateCountLocks('');
+      updateCountLocks('', savedFlag);
       document.getElementById('countMsg').innerHTML = '';
       countsBox.classList.remove('hidden');
     } else {
@@ -744,11 +744,12 @@
         countInput.value = total;
         newInput.value = '';
         lastSaved[countNumber] = total;
+        savedFlag[countNumber] = true;
         updateSavedInfo(countNumber);
         var b = document.getElementById('saveBtn' + countNumber);
         b.classList.remove('pending');
         b.classList.add('saved');
-        updateCountLocks('');
+        updateCountLocks('', savedFlag);
       }
     }).catch(function (err) { showMsg('countMsg', 'خطا در اتصال: ' + err, false); });
   }
@@ -786,6 +787,7 @@
   });
 
   var lastSavedU = { 1: 0, 2: 0, 3: 0 };
+  var savedFlagU = { 1: false, 2: false, 3: false };
   function updateSavedInfoU(n) { document.getElementById('savedInfo' + n + 'U').innerText = '(' + lastSavedU[n] + ')'; }
 
   var resultClearTimerU = null;
@@ -815,10 +817,11 @@
         var b = document.getElementById('saveBtn' + n + 'U');
         b.classList.remove('pending', 'saved');
         var cVal = document.getElementById('count' + n + 'U').value;
-        lastSavedU[n] = (cVal === '' || cVal === undefined) ? 0 : Number(cVal);
+        savedFlagU[n] = (cVal !== '' && cVal !== undefined && cVal !== null);
+        lastSavedU[n] = savedFlagU[n] ? Number(cVal) : 0;
         updateSavedInfoU(n);
       });
-      updateCountLocks('U');
+      updateCountLocks('U', savedFlagU);
       document.getElementById('countMsgU').innerHTML = '';
       countsBox.classList.remove('hidden');
     } else {
@@ -887,11 +890,12 @@
         countInput.value = total;
         newInput.value = '';
         lastSavedU[countNumber] = total;
+        savedFlagU[countNumber] = true;
         updateSavedInfoU(countNumber);
         var b = document.getElementById('saveBtn' + countNumber + 'U');
         b.classList.remove('pending');
         b.classList.add('saved');
-        updateCountLocks('U');
+        updateCountLocks('U', savedFlagU);
       }
     }).catch(function (err) { showMsg('countMsgU', 'خطا در اتصال: ' + err, false); });
   }
@@ -1103,19 +1107,13 @@
 
   [1, 2, 3].forEach(function (n) {
     var onChange = function (num) {
-      return function () {
-        updateRowButtonState(num, '', lastSaved);
-        if (num === 1 || num === 2) updateCountLocks('');
-      };
+      return function () { updateRowButtonState(num, '', lastSaved); };
     }(n);
     document.getElementById('new' + n).addEventListener('input', onChange);
     document.getElementById('count' + n).addEventListener('input', onChange);
 
     var onChangeU = function (num) {
-      return function () {
-        updateRowButtonState(num, 'U', lastSavedU);
-        if (num === 1 || num === 2) updateCountLocks('U');
-      };
+      return function () { updateRowButtonState(num, 'U', lastSavedU); };
     }(n);
     document.getElementById('new' + n + 'U').addEventListener('input', onChangeU);
     document.getElementById('count' + n + 'U').addEventListener('input', onChangeU);
