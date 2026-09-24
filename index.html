@@ -185,6 +185,7 @@
       <button class="tab-btn" id="tabCountReportBtn" onclick="showAdminTab('countReport')">گزارش شمارش‌ها</button>
       <button class="tab-btn" id="tabDiffBtn" onclick="showAdminTab('diff')">اختلاف موجودی</button>
       <button class="tab-btn" id="tabUncountedBtn" onclick="showAdminTab('uncounted')">کالاهای شمارش نشده</button>
+      <button class="tab-btn" id="tabReturnBtn" onclick="showAdminTab('return')">برگشت از خرید</button>
       <button class="tab-btn" id="tabSuppliersBtn" onclick="showAdminTab('suppliers')">تامین‌کنندگان</button>
       <button class="tab-btn" id="tabLocksBtn" onclick="showAdminTab('locks')">کالاهای قفل شده</button>
     </div>
@@ -286,6 +287,9 @@
     <!-- تب کالاهای شمارش نشده -->
     <div id="uncountedTab" class="card hidden"></div>
 
+    <!-- تب برگشت از خرید -->
+    <div id="returnTab" class="card hidden"></div>
+
     <!-- تب تامین‌کنندگان -->
     <div id="suppliersTab" class="card hidden">
       <h2>افزودن تامین‌کننده جدید</h2>
@@ -329,6 +333,7 @@
       <button class="tab-btn" id="uTabReportBtn" onclick="showUserTab('report')">گزارش شمارش‌های من</button>
       <button class="tab-btn" id="uTabDiffBtn" onclick="showUserTab('diff')">اختلاف موجودی</button>
       <button class="tab-btn" id="uTabUncountedBtn" onclick="showUserTab('uncounted')">کالاهای شمارش نشده</button>
+      <button class="tab-btn" id="uTabReturnBtn" onclick="showUserTab('return')">برگشت از خرید</button>
     </div>
 
     <div id="uMainTab" class="card">
@@ -374,6 +379,9 @@
 
     <!-- کالاهای شمارش نشده -->
     <div id="uUncountedTab" class="card hidden"></div>
+
+    <!-- برگشت از خرید -->
+    <div id="uReturnTab" class="card hidden"></div>
   </div>
 </div>
 
@@ -1159,6 +1167,7 @@
     }
     try { localStorage.removeItem(LOGIN_STORAGE_KEY); } catch (e) {}
     adminDiff.reset(); adminUncounted.reset(); userDiff.reset(); userUncounted.reset();
+    adminReturn.reset(); userReturn.reset();
     currentUser = null;
     currentProduct = null;
     currentProductU = null;
@@ -1176,17 +1185,19 @@
 
   /* ---------------- تب‌های پنل کاربر عادی ---------------- */
   function showUserTab(tab) {
-    ['main', 'report', 'diff', 'uncounted'].forEach(function (t) {
+    ['main', 'report', 'diff', 'uncounted', 'return'].forEach(function (t) {
       document.getElementById('u' + capitalize(t) + 'Tab').classList.toggle('hidden', t !== tab);
       document.getElementById('uTab' + capitalize(t) + 'Btn').classList.toggle('active', t === tab);
     });
     if (tab !== 'main') stopScannerIfRunningU();
     if (tab !== 'diff') userDiff.cancelEdit(true);
     if (tab !== 'uncounted') userUncounted.cancelEdit(true);
+    if (tab !== 'return') userReturn.stop();
 
     if (tab === 'report') userCountReport.load(1);
     if (tab === 'diff') userDiff.load(1);
     if (tab === 'uncounted') userUncounted.load(1);
+    if (tab === 'return') userReturn.load();
   }
 
   /* ---------------- تب‌های پنل مدیر ---------------- */
@@ -1196,7 +1207,7 @@
   }
 
   function showAdminTab(tab) {
-    ['scan', 'users', 'report', 'countReport', 'diff', 'uncounted', 'suppliers', 'locks'].forEach(function (t) {
+    ['scan', 'users', 'report', 'countReport', 'diff', 'uncounted', 'return', 'suppliers', 'locks'].forEach(function (t) {
       document.getElementById(t + 'Tab').classList.toggle('hidden', t !== tab);
       document.getElementById('tab' + capitalize(t) + 'Btn').classList.toggle('active', t === tab);
     });
@@ -1208,8 +1219,10 @@
 
     if (tab !== 'diff') adminDiff.cancelEdit(true);
     if (tab !== 'uncounted') adminUncounted.cancelEdit(true);
+    if (tab !== 'return') adminReturn.stop();
     if (tab === 'diff') adminDiff.load(1);
     if (tab === 'uncounted') adminUncounted.load(1);
+    if (tab === 'return') adminReturn.load();
 
     stopLocksAutoRefresh();
     if (tab === 'locks') {
@@ -2113,6 +2126,196 @@
   function stopScannerIfRunning() { scannerAdmin.stop(); }
   function toggleScannerU() { scannerUser.toggle(); }
   function stopScannerIfRunningU() { scannerUser.stop(); }
+
+  /* =======================================================================
+     برگشت از خرید (مشترک بین پنل مدیر و کاربر) - مثل شمارش: مقدار فعلی + مقدار جدید = مقدار ذخیره‌شده
+     ======================================================================= */
+  function makeReturnPanel(containerId, p, getProducts) {
+    var box = document.getElementById(containerId);
+    var current = null, lastSaved = 0, pollTimer = null, clearTimer = null, listCount = -1;
+
+    box.innerHTML =
+      '<h2>برگشت از خرید</h2>' +
+      '<label>جستجوی نام یا کد کالا</label>' +
+      '<input type="text" id="' + p + 'Search" list="' + p + 'List" placeholder="نام یا کد کالا را تایپ یا از لیست انتخاب کنید">' +
+      '<datalist id="' + p + 'List"></datalist>' +
+      '<input type="text" id="' + p + 'Barcode" placeholder="بارکد را وارد یا اسکن کنید">' +
+      '<button id="' + p + 'ScanBtn">📷 اسکن با دوربین</button>' +
+      '<div id="' + p + 'Reader" class="hidden"></div>' +
+      '<button id="' + p + 'Inquiry">استعلام</button>' +
+      '<div id="' + p + 'Result"></div>' +
+      '<div id="' + p + 'Box" class="hidden" style="margin-top:14px; border-top:1px solid #eee; padding-top:14px;">' +
+        '<h2 style="font-size:16px;">ثبت برگشت از خرید</h2>' +
+        '<div id="' + p + 'Msg"></div>' +
+        '<div class="count-row">' +
+          '<div class="count-field"><label>برگشت از خرید <span class="savedInfo" id="' + p + 'Saved"></span></label><input type="number" id="' + p + 'Cur" min="0" step="1"></div>' +
+          '<div class="count-field"><label>مقدار جدید</label><input type="number" id="' + p + 'New" min="0" step="1"></div>' +
+          '<button class="count-save" id="' + p + 'Save">ذخیره</button>' +
+        '</div>' +
+      '</div>';
+
+    function el(id) { return document.getElementById(p + id); }
+
+    var scanner = makeScanner({ readerId: p + 'Reader', inputId: p + 'Barcode', onDetected: submit });
+
+    function remaining() {
+      var s = Number(current.stock); if (isNaN(s)) s = 0;
+      return Math.round((s - lastSaved) * 1000) / 1000;
+    }
+    function updateRemaining() {
+      var r = document.getElementById(p + 'Rem');
+      if (r && current) r.innerText = remaining();
+    }
+
+    function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+    function startPoll() {
+      stopPoll();
+      pollTimer = setInterval(function () {
+        if (!current || !currentUser) { stopPoll(); return; }
+        apiCall(authParams({ action: 'checklock', supplierName: current.supplierName, rowIndex: current.rowIndex, sessionId: sessionId }))
+          .then(function (res) {
+            if (!res.active) {
+              stopPoll(); current = null;
+              showMsg(p + 'Msg', 'قفل این کالا باز شد؛ برای ادامه، دوباره بارکد را استعلام بگیرید.', false);
+              el('Box').classList.remove('hidden');
+            }
+          }).catch(function () {});
+      }, 6000);
+    }
+
+    function render(res) {
+      var out = el('Result');
+      if (clearTimer) { clearTimeout(clearTimer); clearTimer = null; }
+      if (res.found && res.locked) {
+        out.innerHTML = '<div class="result-box result-locked">🔒 ' + res.message + '<br>نام کالا: ' + res.productName + ' | کد: ' + res.productCode + '</div>';
+        current = null; stopPoll(); el('Box').classList.add('hidden');
+        return;
+      }
+      if (res.found) {
+        current = { supplierName: res.supplierName, rowIndex: res.rowIndex, stock: res.stock };
+        var saved = (res.returnQty === '' || res.returnQty === null || res.returnQty === undefined) ? 0 : Number(res.returnQty);
+        lastSaved = isNaN(saved) ? 0 : saved;
+        out.innerHTML =
+          '<div class="result-box result-found">' +
+          '✅ تامین‌کننده: <b>' + res.supplierName + '</b><br>' +
+          'نام کالا: ' + res.productName + '<br>' +
+          'کد کالا: ' + res.productCode + '<br>' +
+          'بارکد: ' + res.barcode + '<br>' +
+          '<span style="font-size:20px;">موجودی انبار: <b>' + res.stock + '</b></span><br>' +
+          '<span style="font-size:20px;">باقیمانده نهایی انبار: <b id="' + p + 'Rem"></b></span>' +
+          '</div>';
+        el('Cur').value = res.returnQty;
+        el('New').value = '';
+        el('Saved').innerText = '(' + lastSaved + ')';
+        el('Save').classList.remove('pending', 'saved');
+        el('Msg').innerHTML = '';
+        el('Box').classList.remove('hidden');
+        updateRemaining();
+        startPoll();
+      } else {
+        out.innerHTML = '<div class="result-box result-notfound">❌ ' + res.message + '</div>';
+        current = null; stopPoll(); el('Box').classList.add('hidden');
+        clearTimer = setTimeout(function () { out.innerHTML = ''; }, 3000);
+      }
+    }
+
+    function submit() {
+      var barcode = el('Barcode').value.trim();
+      if (!barcode || !currentUser) return;
+      apiCall(authParams({ action: 'lookup', barcode: barcode, sessionId: sessionId, purpose: 'return' })).then(function (res) {
+        render(res);
+        el('Barcode').value = '';
+        el('Barcode').blur();
+      }).catch(function (err) {
+        el('Result').innerHTML = '<div class="result-box result-notfound">خطا در اتصال: ' + err + '</div>';
+      });
+    }
+
+    function save() {
+      if (!current || !currentUser) return;
+      var curRaw = el('Cur').value.toString().trim();
+      var curNum = 0;
+      if (curRaw !== '') {
+        curNum = Number(curRaw);
+        if (!Number.isInteger(curNum) || curNum < 0) { showMsg(p + 'Msg', 'مقدار باکس برگشت از خرید باید یک عدد صحیح مثبت باشد', false); return; }
+      }
+      var newRaw = el('New').value.trim();
+      var newNum = 0;
+      if (newRaw !== '') {
+        newNum = Number(newRaw);
+        if (!Number.isInteger(newNum) || newNum < 0) { showMsg(p + 'Msg', 'لطفا یک عدد صحیح مثبت در باکس «مقدار جدید» وارد کنید', false); return; }
+      }
+      if (newRaw === '' && curNum === lastSaved) { showMsg(p + 'Msg', 'تغییری برای ذخیره وجود ندارد', false); return; }
+
+      var total = curNum + newNum;
+      el('Save').disabled = true;
+      apiCall(authParams({
+        action: 'savereturn',
+        supplierName: current.supplierName,
+        rowIndex: current.rowIndex,
+        value: total
+      })).then(function (res) {
+        el('Save').disabled = false;
+        showMsg(p + 'Msg', res.message, res.success);
+        if (res.success) {
+          el('Cur').value = total;
+          el('New').value = '';
+          lastSaved = total;
+          el('Saved').innerText = '(' + total + ')';
+          el('Save').classList.add('saved');
+          updateRemaining();
+        }
+      }).catch(function (err) {
+        el('Save').disabled = false;
+        showMsg(p + 'Msg', 'خطا در اتصال: ' + err, false);
+      });
+    }
+
+    function selectSearched() {
+      var val = el('Search').value.trim();
+      if (!val) return;
+      var match = getProducts().find(function (x) { return productLabel(x) === val; });
+      if (!match) return;
+      var fb = String(match.barcode || '').split(',')[0].trim();
+      if (!fb) return;
+      el('Search').value = '';
+      el('Barcode').value = fb;
+      submit();
+    }
+
+    function load() {
+      var list = getProducts();
+      if (list.length !== listCount) {
+        var dl = el('List');
+        dl.innerHTML = '';
+        list.forEach(function (x) {
+          var opt = document.createElement('option');
+          opt.value = productLabel(x);
+          dl.appendChild(opt);
+        });
+        listCount = list.length;
+      }
+    }
+
+    function stop() { scanner.stop(); }
+    function reset() {
+      scanner.stop(); stopPoll(); current = null; listCount = -1;
+      el('Box').classList.add('hidden');
+      el('Result').innerHTML = '';
+    }
+
+    el('ScanBtn').onclick = function () { scanner.toggle(); };
+    el('Inquiry').onclick = submit;
+    el('Save').onclick = save;
+    el('Barcode').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); submit(); } });
+    el('Search').addEventListener('change', selectSearched);
+    el('Search').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); selectSearched(); } });
+
+    return { load: load, stop: stop, reset: reset };
+  }
+
+  var adminReturn = makeReturnPanel('returnTab', 'rta', function () { return allProducts; });
+  var userReturn = makeReturnPanel('uReturnTab', 'rtu', function () { return allProductsU; });
 
   [1, 2, 3].forEach(function (n) {
     var onChange = function (num) {
