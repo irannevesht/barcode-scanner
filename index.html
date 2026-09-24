@@ -107,6 +107,11 @@
     .delta-neg { color: #991b1b; font-weight: bold; direction: ltr; unicode-bidi: embed; }
     .report-table td.wrap { white-space: normal; min-width: 180px; }
 
+    /* لیست اختلاف موجودی / کالاهای شمارش‌نشده */
+    .diff-lock-note { color: #854d0e; background: #fef9c3; border-radius: 6px; padding: 4px 8px; font-size: 12px; white-space: normal; display: inline-block; }
+    .diff-edit-input { width: 90px !important; margin: 0 !important; padding: 6px !important; font-size: 14px !important; text-align: center; }
+    .diff-ops button { margin: 2px; padding: 6px 12px; font-size: 13px; width: auto; }
+
     @media (max-width: 640px) {
       .container { padding: 10px; }
       .card { padding: 14px; border-radius: 8px; }
@@ -129,6 +134,8 @@
       .count-row .count-save { width: auto; padding: 9px 8px; margin-bottom: 0; font-size: 12px; }
       .count-row .count-field input { padding: 8px 5px; font-size: 13px; }
       .pager button { padding: 10px 12px; font-size: 13px; }
+      .diff-ops button { width: auto; padding: 6px 10px; font-size: 12px; margin-bottom: 2px; }
+      .diff-edit-input { width: 80px !important; padding: 6px !important; font-size: 14px !important; }
     }
 
     .login-container { max-width: 400px; margin-top: 60px; }
@@ -164,6 +171,8 @@
       <button class="tab-btn" id="tabUsersBtn" onclick="showAdminTab('users')">مدیریت کاربران</button>
       <button class="tab-btn" id="tabReportBtn" onclick="showAdminTab('report')">گزارش پیشرفت</button>
       <button class="tab-btn" id="tabCountReportBtn" onclick="showAdminTab('countReport')">گزارش شمارش‌ها</button>
+      <button class="tab-btn" id="tabDiffBtn" onclick="showAdminTab('diff')">اختلاف موجودی</button>
+      <button class="tab-btn" id="tabUncountedBtn" onclick="showAdminTab('uncounted')">کالاهای شمارش نشده</button>
       <button class="tab-btn" id="tabSuppliersBtn" onclick="showAdminTab('suppliers')">تامین‌کنندگان</button>
       <button class="tab-btn" id="tabLocksBtn" onclick="showAdminTab('locks')">کالاهای قفل شده</button>
     </div>
@@ -259,6 +268,12 @@
     <!-- تب گزارش شمارش‌ها (همه کاربران) -->
     <div id="countReportTab" class="card hidden"></div>
 
+    <!-- تب اختلاف موجودی -->
+    <div id="diffTab" class="card hidden"></div>
+
+    <!-- تب کالاهای شمارش نشده -->
+    <div id="uncountedTab" class="card hidden"></div>
+
     <!-- تب تامین‌کنندگان -->
     <div id="suppliersTab" class="card hidden">
       <h2>افزودن تامین‌کننده جدید</h2>
@@ -300,6 +315,8 @@
     <div class="tabs">
       <button class="tab-btn active" id="uTabMainBtn" onclick="showUserTab('main')">استعلام و شمارش</button>
       <button class="tab-btn" id="uTabReportBtn" onclick="showUserTab('report')">گزارش شمارش‌های من</button>
+      <button class="tab-btn" id="uTabDiffBtn" onclick="showUserTab('diff')">اختلاف موجودی</button>
+      <button class="tab-btn" id="uTabUncountedBtn" onclick="showUserTab('uncounted')">کالاهای شمارش نشده</button>
     </div>
 
     <div id="uMainTab" class="card">
@@ -339,6 +356,12 @@
 
     <!-- گزارش شمارش‌های خود کاربر -->
     <div id="uReportTab" class="card hidden"></div>
+
+    <!-- اختلاف موجودی -->
+    <div id="uDiffTab" class="card hidden"></div>
+
+    <!-- کالاهای شمارش نشده -->
+    <div id="uUncountedTab" class="card hidden"></div>
   </div>
 </div>
 
@@ -547,6 +570,279 @@
   var adminCountReport = makeCountReport('countReportTab', 'cra', true, 'گزارش تغییرات شمارش (همه کاربران)');
   var userCountReport = makeCountReport('uReportTab', 'cru', false, 'گزارش شمارش‌های ثبت‌شده توسط من');
 
+  /* =======================================================================
+     لیست «اختلاف موجودی» و «کالاهای شمارش نشده» (مشترک بین پنل مدیر و پنل کاربر)
+     - mode = 'diff'      : کالاهایی که (موجودی - شمارش نهایی) آن‌ها غیرخالی و غیرصفر است
+     - mode = 'uncounted' : کالاهایی که هیچ شمارشی برایشان ثبت نشده
+     - فقط «شمارش نهایی» قابل ویرایش است؛ هر ویرایش قفل جداگانه (DiffLocks) می‌گیرد
+     ======================================================================= */
+  function makeDiffList(containerId, p, mode, title, desc) {
+    var isDiff = (mode === 'diff');
+    var st = { page: 1, pages: 1, total: 0, editing: null, pending: false, pollTimer: null };
+    var searchTimer = null;
+    var box = document.getElementById(containerId);
+
+    box.innerHTML =
+      '<h2>' + title + '</h2>' +
+      '<div id="' + p + 'Msg"></div>' +
+      '<p style="font-size:13px; color:#666;">' + desc + '</p>' +
+      '<div class="flex">' +
+        '<div><label>جستجو (برند، بارکد، نام یا کد کالا)</label>' +
+          '<input type="text" id="' + p + 'Search" placeholder="عبارت جستجو را وارد کنید"></div>' +
+        '<div><label>تعداد نمایش در هر صفحه</label>' +
+          '<select id="' + p + 'Size"><option value="10">10</option><option value="25" selected>25</option>' +
+          '<option value="50">50</option><option value="100">100</option><option value="200">200</option></select></div>' +
+        '<div class="btn-col"><label>&nbsp;</label><button class="secondary" id="' + p + 'Refresh">به‌روزرسانی</button></div>' +
+      '</div>' +
+      '<table class="report-table"><thead><tr>' +
+        '<th>برند</th><th>بارکد</th><th>نام کالا</th><th>موجودی انبار</th><th>شمارش نهایی</th>' +
+        (isDiff ? '<th>اختلاف موجودی</th>' : '') +
+        '<th>عملیات</th>' +
+      '</tr></thead><tbody id="' + p + 'Body"></tbody></table>' +
+      '<div class="pager">' +
+        '<button id="' + p + 'Prev">صفحه قبل</button>' +
+        '<div class="pager-info" id="' + p + 'Info"></div>' +
+        '<button id="' + p + 'Next">صفحه بعد</button>' +
+      '</div>';
+
+    function el(id) { return document.getElementById(p + id); }
+    var COLS = isDiff ? 7 : 6;
+
+    function td(text, cls) {
+      var c = document.createElement('td');
+      c.innerText = (text === undefined || text === null) ? '' : text;
+      if (cls) c.className = cls;
+      return c;
+    }
+
+    function stopPoll() {
+      if (st.pollTimer) { clearInterval(st.pollTimer); st.pollTimer = null; }
+    }
+
+    /* ضربان قفل: هر ۶ ثانیه؛ اگر قفل از بین رفته باشد (مثلا باز شدن توسط مدیر) ویرایش لغو می‌شود */
+    function startPoll(sup, row) {
+      stopPoll();
+      st.pollTimer = setInterval(function () {
+        if (!st.editing || !currentUser) { stopPoll(); return; }
+        apiCall(authParams({ action: 'diffcheck', supplierName: sup, rowIndex: row, sessionId: sessionId }))
+          .then(function (res) {
+            if (!st.editing) return;
+            if (!res.active) {
+              stopPoll();
+              st.editing = null;
+              showMsg(p + 'Msg', 'قفل ویرایش این کالا باز شد؛ برای ادامه دوباره روی «ویرایش شمارش» بزنید.', false);
+              load(st.page, true);
+            }
+          }).catch(function () {});
+      }, 6000);
+    }
+
+    /* لغو ویرایش جاری و آزاد کردن قفل. silent=true یعنی لیست دوباره بارگذاری نشود */
+    function cancelEdit(silent) {
+      if (!st.editing) return;
+      stopPoll();
+      st.editing = null;
+      if (currentUser) {
+        apiCall(authParams({ action: 'diffrelease', sessionId: sessionId })).catch(function () {});
+      }
+      if (!silent) load(st.page, true);
+    }
+
+    /* بدون تماس با سرور (برای خروج از حساب که قفل‌ها را خودش آزاد می‌کند) */
+    function reset() {
+      stopPoll();
+      st.editing = null;
+      st.pending = false;
+    }
+
+    function startEdit(r, finalTd, opsTd, editBtn) {
+      if (st.pending) return;
+      // اگر ردیف دیگری در حال ویرایش بود، سرور قفل قبلی را خودش آزاد می‌کند
+      stopPoll();
+      st.editing = null;
+      st.pending = true;
+      editBtn.disabled = true;
+
+      apiCall(authParams({
+        action: 'difflock',
+        supplierName: r.supplierName,
+        rowIndex: r.rowIndex,
+        mode: mode,
+        sessionId: sessionId
+      })).then(function (res) {
+        st.pending = false;
+        if (!res.success) {
+          showMsg(p + 'Msg', res.message || 'خطا', false);
+          if (res.reload) load(st.page, true); else editBtn.disabled = false;
+          return;
+        }
+        if (res.locked) {
+          showMsg(p + 'Msg', 'این کالا هم‌اکنون توسط «' + res.lockedByFullName + '» در حال ویرایش است', false);
+          load(st.page, true);
+          return;
+        }
+
+        st.editing = { supplierName: r.supplierName, rowIndex: r.rowIndex };
+
+        finalTd.innerHTML = '';
+        var inp = document.createElement('input');
+        inp.type = 'number';
+        inp.min = '0';
+        inp.step = '1';
+        inp.className = 'diff-edit-input';
+        inp.value = (res.finalCount === '' || res.finalCount === null || res.finalCount === undefined) ? '' : res.finalCount;
+        finalTd.appendChild(inp);
+
+        opsTd.innerHTML = '';
+        var saveBtn = document.createElement('button');
+        saveBtn.innerText = 'ذخیره';
+        var cancelBtn = document.createElement('button');
+        cancelBtn.className = 'secondary';
+        cancelBtn.innerText = 'انصراف';
+        opsTd.appendChild(saveBtn);
+        opsTd.appendChild(cancelBtn);
+
+        function doSave() {
+          var raw = inp.value.trim();
+          var num = Number(raw);
+          if (raw === '' || !Number.isInteger(num) || num < 0) {
+            showMsg(p + 'Msg', 'لطفا یک عدد صحیح مثبت وارد کنید', false);
+            return;
+          }
+          saveBtn.disabled = true;
+          apiCall(authParams({
+            action: 'diffsave',
+            supplierName: r.supplierName,
+            rowIndex: r.rowIndex,
+            value: num,
+            mode: mode,
+            sessionId: sessionId
+          })).then(function (sres) {
+            showMsg(p + 'Msg', sres.message || (sres.success ? 'ذخیره شد' : 'خطا'), sres.success);
+            if (sres.success) {
+              // قفل در سرور آزاد شده است
+              stopPoll();
+              st.editing = null;
+              load(st.page, true);
+            } else {
+              saveBtn.disabled = false;
+              if (sres.lockLost) { stopPoll(); st.editing = null; load(st.page, true); }
+            }
+          }).catch(function (err) {
+            saveBtn.disabled = false;
+            showMsg(p + 'Msg', 'خطا در اتصال: ' + err, false);
+          });
+        }
+
+        saveBtn.onclick = doSave;
+        cancelBtn.onclick = function () { cancelEdit(false); };
+        inp.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter') { ev.preventDefault(); doSave(); }
+        });
+
+        startPoll(r.supplierName, r.rowIndex);
+        inp.focus();
+      }).catch(function (err) {
+        st.pending = false;
+        editBtn.disabled = false;
+        showMsg(p + 'Msg', 'خطا در اتصال: ' + err, false);
+      });
+    }
+
+    function render(res) {
+      var body = el('Body');
+      body.innerHTML = '';
+      st.page = res.page; st.pages = res.pages; st.total = res.total;
+
+      if (!res.rows.length) {
+        var tr0 = document.createElement('tr');
+        var t0 = document.createElement('td');
+        t0.colSpan = COLS;
+        t0.innerText = isDiff ? 'کالایی با اختلاف موجودی یافت نشد' : 'کالای شمارش‌نشده‌ای یافت نشد';
+        tr0.appendChild(t0);
+        body.appendChild(tr0);
+      }
+
+      res.rows.forEach(function (r) {
+        var tr = document.createElement('tr');
+        tr.appendChild(td(r.supplierName));
+        tr.appendChild(td(r.barcode));
+        tr.appendChild(td(r.productName, 'wrap'));
+        tr.appendChild(td(r.stock));
+
+        var finalTd = td((r.finalCount === '' || r.finalCount === null || r.finalCount === undefined) ? '—' : r.finalCount);
+        tr.appendChild(finalTd);
+
+        if (isDiff) {
+          var d = Number(r.diff);
+          tr.appendChild(td(d > 0 ? '+' + d : String(d), d > 0 ? 'delta-pos' : (d < 0 ? 'delta-neg' : '')));
+        }
+
+        var opsTd = document.createElement('td');
+        opsTd.className = 'diff-ops';
+        if (r.locked && !r.lockedByMe) {
+          var note = document.createElement('span');
+          note.className = 'diff-lock-note';
+          note.innerText = '🔒 در حال ویرایش توسط ' + (r.lockedByFullName || '');
+          opsTd.appendChild(note);
+        } else {
+          var editBtn = document.createElement('button');
+          editBtn.innerText = 'ویرایش شمارش';
+          editBtn.onclick = function () { startEdit(r, finalTd, opsTd, editBtn); };
+          opsTd.appendChild(editBtn);
+        }
+        tr.appendChild(opsTd);
+        body.appendChild(tr);
+      });
+
+      el('Info').innerText = 'صفحه ' + res.page + ' از ' + res.pages + ' (' + res.total + ' مورد)';
+      el('Prev').disabled = res.page <= 1;
+      el('Next').disabled = res.page >= res.pages;
+    }
+
+    function load(page, keepMsg) {
+      if (!currentUser) return;
+      if (st.editing) cancelEdit(true); // بارگذاری مجدد لیست، ویرایش نیمه‌کاره را لغو و قفل را آزاد می‌کند
+      if (page) st.page = page;
+      if (!keepMsg) el('Msg').innerHTML = '';
+      apiCall(authParams({
+        action: 'difflist',
+        mode: mode,
+        page: st.page,
+        pageSize: el('Size').value,
+        q: el('Search').value.trim(),
+        sessionId: sessionId
+      })).then(function (res) {
+        if (!res.success) { showMsg(p + 'Msg', res.message || 'خطا در دریافت لیست', false); return; }
+        render(res);
+      }).catch(function (err) { showMsg(p + 'Msg', 'خطا در اتصال: ' + err, false); });
+    }
+
+    el('Prev').onclick = function () { if (st.page > 1) load(st.page - 1); };
+    el('Next').onclick = function () { if (st.page < st.pages) load(st.page + 1); };
+    el('Refresh').onclick = function () { load(); };
+    el('Size').onchange = function () { load(1); };
+    el('Search').addEventListener('input', function () {
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(function () { load(1); }, 400);
+    });
+    el('Search').addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); if (searchTimer) clearTimeout(searchTimer); load(1); }
+    });
+    el('Prev').disabled = true;
+    el('Next').disabled = true;
+
+    return { load: load, cancelEdit: cancelEdit, reset: reset };
+  }
+
+  var DIFF_DESC = 'کالاهایی که «موجودی انبار منهای شمارش نهایی» آن‌ها خالی یا صفر نیست. شمارش نهایی همان آخرین شمارش ثبت‌شده (اولویت با شمارش سوم، بعد دوم، بعد اول) است و فقط ستون شمارش نهایی قابل ویرایش است. تا زمانی که یک کالا را ویرایش می‌کنید، برای دیگران قفل می‌شود.';
+  var UNCOUNTED_DESC = 'کالاهایی که هیچ‌کدام از شمارش‌های اول، دوم و سوم برایشان ثبت نشده است. مقداری که در شمارش نهایی وارد کنید به‌عنوان «شمارش اول» ثبت می‌شود. تا زمانی که یک کالا را ویرایش می‌کنید، برای دیگران قفل می‌شود.';
+
+  var adminDiff = makeDiffList('diffTab', 'dfa', 'diff', 'اختلاف موجودی', DIFF_DESC);
+  var adminUncounted = makeDiffList('uncountedTab', 'una', 'uncounted', 'کالاهای شمارش نشده', UNCOUNTED_DESC);
+  var userDiff = makeDiffList('uDiffTab', 'dfu', 'diff', 'اختلاف موجودی', DIFF_DESC);
+  var userUncounted = makeDiffList('uUncountedTab', 'unu', 'uncounted', 'کالاهای شمارش نشده', UNCOUNTED_DESC);
+
   /* ---------------- ورود / خروج ---------------- */
   function enterAppAfterLogin(res) {
     document.getElementById('loginView').classList.add('hidden');
@@ -603,9 +899,11 @@
 
   function logout() {
     if (currentUser) {
+      // این درخواست قفل‌های کالا و قفل‌های لیست اختلاف موجودی / شمارش‌نشده را هم آزاد می‌کند
       apiCall(authParams({ action: 'releaselock', sessionId: sessionId })).catch(function () {});
     }
     try { localStorage.removeItem(LOGIN_STORAGE_KEY); } catch (e) {}
+    adminDiff.reset(); adminUncounted.reset(); userDiff.reset(); userUncounted.reset();
     currentUser = null;
     currentProduct = null;
     currentProductU = null;
@@ -623,14 +921,17 @@
 
   /* ---------------- تب‌های پنل کاربر عادی ---------------- */
   function showUserTab(tab) {
-    document.getElementById('uMainTab').classList.toggle('hidden', tab !== 'main');
-    document.getElementById('uReportTab').classList.toggle('hidden', tab !== 'report');
-    document.getElementById('uTabMainBtn').classList.toggle('active', tab === 'main');
-    document.getElementById('uTabReportBtn').classList.toggle('active', tab === 'report');
-    if (tab === 'report') {
-      stopScannerIfRunningU();
-      userCountReport.load(1);
-    }
+    ['main', 'report', 'diff', 'uncounted'].forEach(function (t) {
+      document.getElementById('u' + capitalize(t) + 'Tab').classList.toggle('hidden', t !== tab);
+      document.getElementById('uTab' + capitalize(t) + 'Btn').classList.toggle('active', t === tab);
+    });
+    if (tab !== 'main') stopScannerIfRunningU();
+    if (tab !== 'diff') userDiff.cancelEdit(true);
+    if (tab !== 'uncounted') userUncounted.cancelEdit(true);
+
+    if (tab === 'report') userCountReport.load(1);
+    if (tab === 'diff') userDiff.load(1);
+    if (tab === 'uncounted') userUncounted.load(1);
   }
 
   /* ---------------- تب‌های پنل مدیر ---------------- */
@@ -640,7 +941,7 @@
   }
 
   function showAdminTab(tab) {
-    ['scan', 'users', 'report', 'countReport', 'suppliers', 'locks'].forEach(function (t) {
+    ['scan', 'users', 'report', 'countReport', 'diff', 'uncounted', 'suppliers', 'locks'].forEach(function (t) {
       document.getElementById(t + 'Tab').classList.toggle('hidden', t !== tab);
       document.getElementById('tab' + capitalize(t) + 'Btn').classList.toggle('active', t === tab);
     });
@@ -649,6 +950,11 @@
     if (tab === 'countReport') adminCountReport.load(1);
     if (tab === 'suppliers') loadSuppliers();
     if (tab !== 'scan') stopScannerIfRunning();
+
+    if (tab !== 'diff') adminDiff.cancelEdit(true);
+    if (tab !== 'uncounted') adminUncounted.cancelEdit(true);
+    if (tab === 'diff') adminDiff.load(1);
+    if (tab === 'uncounted') adminUncounted.load(1);
 
     stopLocksAutoRefresh();
     if (tab === 'locks') {
@@ -1564,7 +1870,7 @@
   /* در صورت وجود اطلاعات ورود ذخیره‌شده، به‌صورت خودکار وارد شو */
   tryAutoLogin();
 
-  /* قفل کالای در حال ویرایش این تب هنگام بستن/ترک صفحه آزاد شود */
+  /* قفل کالای در حال ویرایش این تب (و قفل لیست‌های اختلاف موجودی / شمارش‌نشده) هنگام بستن/ترک صفحه آزاد شود */
   window.addEventListener('beforeunload', function () {
     if (currentUser) {
       try {
