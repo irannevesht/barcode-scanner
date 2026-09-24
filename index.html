@@ -57,8 +57,8 @@
       color: #fff;
       padding: 12px 20px;
     }
-    .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
-    .tab-btn { background: #e5e7eb; color: #111; flex: 1; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    .tab-btn { background: #e5e7eb; color: #111; flex: 1; min-width: 120px; }
     .tab-btn.active { background: #2563eb; color: #fff; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { border: 1px solid #e2e2e2; padding: 8px; text-align: center; font-size: 14px; }
@@ -66,6 +66,7 @@
     .result-box { margin-top: 16px; padding: 16px; border-radius: 8px; text-align: center; font-size: 16px; }
     .result-found { background: #dcfce7; color: #166534; }
     .result-notfound { background: #fee2e2; color: #991b1b; }
+    .result-locked { background: #fef9c3; color: #854d0e; }
     .msg { padding: 10px; border-radius: 6px; margin-bottom: 10px; }
     .msg-ok { background: #dcfce7; color: #166534; }
     .msg-err { background: #fee2e2; color: #991b1b; }
@@ -76,7 +77,6 @@
     label { font-size: 13px; color: #555; display: block; }
     .savedInfo { font-size: 11px; color: #888; font-weight: normal; }
 
-    /* ردیف فشرده شمارش: باکس شمارش + باکس مقدار جدید + دکمه ذخیره، همه کنار هم در یک سطر */
     .count-row { display: flex; align-items: flex-end; gap: 6px; margin-bottom: 10px; flex-wrap: nowrap; }
     .count-row .count-field { flex: 1 1 0; min-width: 0; }
     .count-row .count-field label { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -154,6 +154,7 @@
       <button class="tab-btn" id="tabUsersBtn" onclick="showAdminTab('users')">مدیریت کاربران</button>
       <button class="tab-btn" id="tabReportBtn" onclick="showAdminTab('report')">گزارش پیشرفت</button>
       <button class="tab-btn" id="tabSuppliersBtn" onclick="showAdminTab('suppliers')">تامین‌کنندگان</button>
+      <button class="tab-btn" id="tabLocksBtn" onclick="showAdminTab('locks')">کالاهای قفل شده</button>
     </div>
 
     <!-- تب استعلام (همان امکانات کاربر عادی، برای مدیر هم در دسترس) -->
@@ -217,6 +218,7 @@
     <!-- تب گزارش -->
     <div id="reportTab" class="card hidden">
       <h2>پیشرفت کلی</h2>
+      <div id="reportMsg"></div>
       <div class="progress-row">
         <div class="progress-outer"><div class="progress-inner" id="overallProgressBar" style="width:0%;">0%</div></div>
       </div>
@@ -255,6 +257,19 @@
       <table>
         <thead><tr><th>شماره</th><th>نام تامین‌کننده</th><th>عملیات</th></tr></thead>
         <tbody id="suppliersTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- تب کالاهای قفل شده -->
+    <div id="locksTab" class="card hidden">
+      <h2>کالاهای قفل شده (در حال ثبت توسط کاربران)</h2>
+      <div id="locksMsg"></div>
+      <p style="font-size:13px; color:#666;">تا زمانی که یک کاربر روی یک کالا باز است، آن کالا قفل می‌شود تا
+      دو نفر هم‌زمان روی آن ثبت نکنند. در صورت نیاز (مثلا قطع ارتباط کاربر)، می‌توانید قفل را از اینجا باز کنید.</p>
+      <button class="secondary" onclick="loadLocks()">به‌روزرسانی لیست</button>
+      <table>
+        <thead><tr><th>تامین‌کننده</th><th>کد کالا</th><th>نام کالا</th><th>کاربر</th><th>زمان قفل</th><th>عملیات</th></tr></thead>
+        <tbody id="locksTableBody"></tbody>
       </table>
     </div>
   </div>
@@ -308,6 +323,14 @@
   /* آدرس وب‌اپ اپ‌اسکریپت - فقط به عنوان بک‌اند API (JSON) استفاده می‌شود، نه رابط کاربری */
   var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxJzZ8RzRL6wZ8MEpKiSYla4o0qhsrQfjkV01x04KRfme2nloWfrBTP2wY7yU3XNEWFng/exec';
   var currentUser = null; // { username, password, fullName, role }
+  var LOGIN_STORAGE_KEY = 'invLoginCreds_v1';
+
+  /* شناسه یکتای این نشست/تب مرورگر - برای قفل همزمانی کالاها. تا زمانی که تب باز است ثابت می‌ماند */
+  var sessionId = sessionStorage.getItem('invSessionId_v1');
+  if (!sessionId) {
+    sessionId = 'S' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    sessionStorage.setItem('invSessionId_v1', sessionId);
+  }
 
   function showMsg(elId, text, ok) {
     document.getElementById(elId).innerHTML =
@@ -357,6 +380,20 @@
   }
 
   /* ---------------- ورود / خروج ---------------- */
+  function enterAppAfterLogin(res) {
+    document.getElementById('loginView').classList.add('hidden');
+    if (res.role === 'admin') {
+      document.getElementById('adminView').classList.remove('hidden');
+      document.getElementById('adminFullName').innerText = res.fullName;
+      showAdminTab('scan');
+      loadProductList();
+    } else {
+      document.getElementById('userView').classList.remove('hidden');
+      document.getElementById('userFullName').innerText = res.fullName;
+      loadProductListU();
+    }
+  }
+
   function doLogin() {
     var u = document.getElementById('loginUsername').value.trim();
     var p = document.getElementById('loginPassword').value.trim();
@@ -366,17 +403,10 @@
     apiCall({ action: 'login', username: u, password: p }).then(function (res) {
       if (res.success) {
         currentUser = { username: u, password: p, fullName: res.fullName, role: res.role };
-        document.getElementById('loginView').classList.add('hidden');
-        if (res.role === 'admin') {
-          document.getElementById('adminView').classList.remove('hidden');
-          document.getElementById('adminFullName').innerText = res.fullName;
-          showAdminTab('scan');
-          loadProductList();
-        } else {
-          document.getElementById('userView').classList.remove('hidden');
-          document.getElementById('userFullName').innerText = res.fullName;
-          loadProductListU();
-        }
+        try {
+          localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify({ username: u, password: p }));
+        } catch (e) { /* ذخیره‌سازی محلی در دسترس نیست، مشکلی نیست */ }
+        enterAppAfterLogin(res);
       } else {
         showMsg('loginMsg', res.message || 'خطا در ورود', false);
       }
@@ -385,10 +415,33 @@
     });
   }
 
+  /* ورود خودکار در صورت وجود اطلاعات ذخیره‌شده در مرورگر (تا زدن دکمه خروج یا تغییر رمز، لاگین باقی می‌ماند) */
+  function tryAutoLogin() {
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(LOGIN_STORAGE_KEY) || 'null'); } catch (e) { saved = null; }
+    if (!saved || !saved.username || !saved.password) return;
+
+    apiCall({ action: 'login', username: saved.username, password: saved.password }).then(function (res) {
+      if (res.success) {
+        currentUser = { username: saved.username, password: saved.password, fullName: res.fullName, role: res.role };
+        enterAppAfterLogin(res);
+      } else {
+        // رمز عبور یا نام کاربری دیگر معتبر نیست (مثلا تغییر کرده)؛ اطلاعات ذخیره‌شده پاک شود
+        localStorage.removeItem(LOGIN_STORAGE_KEY);
+      }
+    }).catch(function () { /* در صورت خطای شبکه، فرم ورود دستی نمایش داده می‌شود */ });
+  }
+
   function logout() {
+    if (currentUser) {
+      apiCall(authParams({ action: 'releaselock', sessionId: sessionId })).catch(function () {});
+    }
+    try { localStorage.removeItem(LOGIN_STORAGE_KEY); } catch (e) {}
     currentUser = null;
     stopScannerIfRunning();
     stopScannerIfRunningU();
+    stopLockPolling();
+    stopLockPollingU();
     document.getElementById('adminView').classList.add('hidden');
     document.getElementById('userView').classList.add('hidden');
     document.getElementById('loginView').classList.remove('hidden');
@@ -398,13 +451,14 @@
 
   /* ---------------- تب‌های پنل مدیر ---------------- */
   function showAdminTab(tab) {
-    ['scan', 'users', 'report', 'suppliers'].forEach(function (t) {
+    ['scan', 'users', 'report', 'suppliers', 'locks'].forEach(function (t) {
       document.getElementById(t + 'Tab').classList.toggle('hidden', t !== tab);
       document.getElementById('tab' + capitalize(t) + 'Btn').classList.toggle('active', t === tab);
     });
     if (tab === 'users') loadUsers();
     if (tab === 'report') loadReport();
     if (tab === 'suppliers') loadSuppliers();
+    if (tab === 'locks') loadLocks();
   }
   function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -432,7 +486,7 @@
         tr.appendChild(tdName); tr.appendChild(tdUser); tr.appendChild(tdRole); tr.appendChild(tdOps);
         body.appendChild(tr);
       });
-    });
+    }).catch(function (err) { showMsg('userMsg', 'خطا در اتصال: ' + err, false); });
   }
 
   function resetUserForm() {
@@ -473,7 +527,15 @@
       role: role
     })).then(function (res) {
       showMsg('userMsg', res.message, res.success);
-      if (res.success) { resetUserForm(); loadUsers(); }
+      if (res.success) {
+        // اگر مدیر رمز خودش را عوض کرد، اطلاعات ذخیره‌شده محلی هم به‌روز شود
+        if (original === currentUser.username) {
+          currentUser.password = password;
+          currentUser.username = username;
+          try { localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify({ username: username, password: password })); } catch (e) {}
+        }
+        resetUserForm(); loadUsers();
+      }
     }).catch(function (err) { showMsg('userMsg', 'خطا در اتصال: ' + err, false); });
   }
 
@@ -481,7 +543,7 @@
     if (!confirm('آیا از حذف این کاربر مطمئن هستید؟')) return;
     apiCall(authParams({ action: 'deleteuser', targetUsername: username })).then(function () {
       loadUsers();
-    });
+    }).catch(function (err) { showMsg('userMsg', 'خطا در اتصال: ' + err, false); });
   }
 
   /* ---------------- تامین‌کنندگان ---------------- */
@@ -501,7 +563,7 @@
         tr.appendChild(tdNum); tr.appendChild(tdName); tr.appendChild(tdOps);
         body.appendChild(tr);
       });
-    });
+    }).catch(function (err) { showMsg('supplierMsg', 'خطا در اتصال: ' + err, false); });
   }
 
   function addSupplier() {
@@ -542,63 +604,163 @@
     }).catch(function (err) { showMsg('supplierMsg', 'خطا در اتصال: ' + err, false); });
   }
 
+  /* ---------------- کالاهای قفل شده ---------------- */
+  function loadLocks() {
+    apiCall(authParams({ action: 'locklist' })).then(function (res) {
+      if (!res.success) { showMsg('locksMsg', res.message || 'خطا در دریافت لیست', false); return; }
+      document.getElementById('locksMsg').innerHTML = '';
+      var body = document.getElementById('locksTableBody');
+      body.innerHTML = '';
+      if (!res.locks || res.locks.length === 0) {
+        var tr0 = document.createElement('tr');
+        var td0 = document.createElement('td');
+        td0.colSpan = 6;
+        td0.innerText = 'در حال حاضر هیچ کالایی قفل نیست';
+        tr0.appendChild(td0);
+        body.appendChild(tr0);
+        return;
+      }
+      res.locks.forEach(function (l) {
+        var tr = document.createElement('tr');
+        var unlockBtn = document.createElement('button');
+        unlockBtn.className = 'danger';
+        unlockBtn.innerText = 'باز کردن قفل';
+        unlockBtn.onclick = function () { unlockProduct(l.supplierName, l.rowIndex); };
+
+        var tdSup = document.createElement('td'); tdSup.innerText = l.supplierName;
+        var tdCode = document.createElement('td'); tdCode.innerText = l.productCode;
+        var tdName = document.createElement('td'); tdName.innerText = l.productName;
+        var tdUser = document.createElement('td'); tdUser.innerText = l.fullName || l.username;
+        var tdTime = document.createElement('td'); tdTime.innerText = l.lockedAt;
+        var tdOps = document.createElement('td'); tdOps.appendChild(unlockBtn);
+
+        tr.appendChild(tdSup); tr.appendChild(tdCode); tr.appendChild(tdName);
+        tr.appendChild(tdUser); tr.appendChild(tdTime); tr.appendChild(tdOps);
+        body.appendChild(tr);
+      });
+    }).catch(function (err) { showMsg('locksMsg', 'خطا در اتصال: ' + err, false); });
+  }
+
+  function unlockProduct(supplierName, rowIndex) {
+    if (!confirm('آیا از باز کردن قفل این کالا مطمئن هستید؟ کاربری که در حال ثبت آن است از صفحه آن خارج می‌شود.')) return;
+    apiCall(authParams({ action: 'unlocklock', supplierName: supplierName, rowIndex: rowIndex })).then(function (res) {
+      showMsg('locksMsg', res.success ? 'قفل باز شد' : (res.message || 'خطا'), res.success);
+      loadLocks();
+    }).catch(function (err) { showMsg('locksMsg', 'خطا در اتصال: ' + err, false); });
+  }
+
   /* ---------------- گزارش ---------------- */
-  google.charts.load('current', { packages: ['corechart', 'line'] });
+  var chartsLoadAttempted = false;
+  function ensureChartsLoaded(callback) {
+    if (window.google && google.visualization) { callback(); return; }
+    if (!chartsLoadAttempted) {
+      chartsLoadAttempted = true;
+      try {
+        google.charts.load('current', { packages: ['corechart', 'line'] });
+        google.charts.setOnLoadCallback(callback);
+      } catch (e) {
+        // کتابخانه نمودار بارگذاری نشد (مثلا قطعی اینترنت)؛ فقط نمودار خطی نمایش داده نمی‌شود
+      }
+    } else {
+      // در حال بارگذاری است؛ کمی بعد دوباره تلاش کن، ولی بدون قفل کردن بقیه صفحه
+      setTimeout(function () {
+        if (window.google && google.visualization) callback();
+      }, 1500);
+    }
+  }
 
   function loadReport() {
+    document.getElementById('reportMsg').innerHTML = '';
     apiCall(authParams({ action: 'getreport' })).then(function (resWrap) {
-      if (!resWrap.success) return;
-      var data = resWrap.data;
-      document.getElementById('overallProgressBar').style.width = data.overallPercent + '%';
-      document.getElementById('overallProgressBar').innerText = data.overallPercent + '%';
-      document.getElementById('overallText').innerText =
-        'تعداد کالاهای چک‌شده: ' + data.checkedAll + ' از ' + data.totalAll;
-
-      document.getElementById('count1OverallBar').style.width = data.count1OverallPercent + '%';
-      document.getElementById('count1OverallBar').innerText = data.count1OverallPercent + '%';
-      document.getElementById('count2OverallBar').style.width = data.count2OverallPercent + '%';
-      document.getElementById('count2OverallBar').innerText = data.count2OverallPercent + '%';
-      document.getElementById('count3OverallBar').style.width = data.count3OverallPercent + '%';
-      document.getElementById('count3OverallBar').innerText = data.count3OverallPercent + '%';
-
-      var list = document.getElementById('supplierProgressList');
-      list.innerHTML = '';
-      data.supplierReport.forEach(function (s) {
-        var row = document.createElement('div');
-        row.className = 'progress-row';
-        row.style.borderBottom = '1px solid #eee';
-        row.style.paddingBottom = '10px';
-        row.style.marginBottom = '12px';
-        row.innerHTML =
-          '<div style="font-weight:bold;">' + s.number + ' - ' + s.name + ' (استعلام: ' + s.checked + '/' + s.total + ')</div>' +
-          '<div class="progress-outer"><div class="progress-inner" style="width:' + s.percent + '%;">' + s.percent + '%</div></div>' +
-          '<div style="font-size:12px; margin-top:6px;">شمارش اول (' + s.count1 + '/' + s.total + ')</div>' +
-          '<div class="progress-outer"><div class="progress-inner" style="width:' + s.count1Percent + '%; background:#3b82f6;">' + s.count1Percent + '%</div></div>' +
-          '<div style="font-size:12px; margin-top:6px;">شمارش دوم (' + s.count2 + '/' + s.total + ')</div>' +
-          '<div class="progress-outer"><div class="progress-inner" style="width:' + s.count2Percent + '%; background:#f59e0b;">' + s.count2Percent + '%</div></div>' +
-          '<div style="font-size:12px; margin-top:6px;">شمارش سوم (' + s.count3 + '/' + s.total + ')</div>' +
-          '<div class="progress-outer"><div class="progress-inner" style="width:' + s.count3Percent + '%; background:#a855f7;">' + s.count3Percent + '%</div></div>';
-        list.appendChild(row);
-      });
-
-      drawLineChart(data);
+      if (!resWrap.success) {
+        showMsg('reportMsg', resWrap.message || 'خطا در دریافت گزارش', false);
+        return;
+      }
+      try {
+        renderReport(resWrap.data);
+      } catch (renderErr) {
+        showMsg('reportMsg', 'خطا در نمایش گزارش: ' + renderErr, false);
+      }
+    }).catch(function (err) {
+      showMsg('reportMsg', 'خطا در اتصال به سامانه هنگام دریافت گزارش: ' + err, false);
     });
+  }
+
+  function renderReport(data) {
+    document.getElementById('overallProgressBar').style.width = data.overallPercent + '%';
+    document.getElementById('overallProgressBar').innerText = data.overallPercent + '%';
+    document.getElementById('overallText').innerText =
+      'تعداد کالاهای چک‌شده: ' + data.checkedAll + ' از ' + data.totalAll;
+
+    document.getElementById('count1OverallBar').style.width = data.count1OverallPercent + '%';
+    document.getElementById('count1OverallBar').innerText = data.count1OverallPercent + '%';
+    document.getElementById('count2OverallBar').style.width = data.count2OverallPercent + '%';
+    document.getElementById('count2OverallBar').innerText = data.count2OverallPercent + '%';
+    document.getElementById('count3OverallBar').style.width = data.count3OverallPercent + '%';
+    document.getElementById('count3OverallBar').innerText = data.count3OverallPercent + '%';
+
+    var list = document.getElementById('supplierProgressList');
+    list.innerHTML = '';
+    (data.supplierReport || []).forEach(function (s) {
+      var row = document.createElement('div');
+      row.className = 'progress-row';
+      row.style.borderBottom = '1px solid #eee';
+      row.style.paddingBottom = '10px';
+      row.style.marginBottom = '12px';
+
+      var title = document.createElement('div');
+      title.style.fontWeight = 'bold';
+      title.innerText = s.number + ' - ' + s.name + ' (استعلام: ' + s.checked + '/' + s.total + ')';
+      row.appendChild(title);
+
+      function bar(labelText, percent, color) {
+        var lbl = document.createElement('div');
+        lbl.style.fontSize = '12px';
+        lbl.style.marginTop = '6px';
+        lbl.innerText = labelText;
+        var outer = document.createElement('div');
+        outer.className = 'progress-outer';
+        var inner = document.createElement('div');
+        inner.className = 'progress-inner';
+        inner.style.width = percent + '%';
+        if (color) inner.style.background = color;
+        inner.innerText = percent + '%';
+        outer.appendChild(inner);
+        row.appendChild(lbl);
+        row.appendChild(outer);
+      }
+
+      bar('', s.percent);
+      bar('شمارش اول (' + s.count1 + '/' + s.total + ')', s.count1Percent, '#3b82f6');
+      bar('شمارش دوم (' + s.count2 + '/' + s.total + ')', s.count2Percent, '#f59e0b');
+      bar('شمارش سوم (' + s.count3 + '/' + s.total + ')', s.count3Percent, '#a855f7');
+
+      list.appendChild(row);
+    });
+
+    drawLineChart(data);
   }
 
   function drawLineChart(data) {
     var el = document.getElementById('lineChart');
-    if (!data.lineChartRows.length || !data.users.length) {
+    if (!data.lineChartRows || !data.lineChartRows.length || !data.users || !data.users.length) {
       el.innerHTML = '<p style="color:#888;">هنوز داده‌ای برای نمایش وجود ندارد</p>';
       return;
     }
-    google.charts.setOnLoadCallback(function () {
-      var dataTable = new google.visualization.DataTable();
-      dataTable.addColumn('string', 'تاریخ');
-      data.users.forEach(function (u) { dataTable.addColumn('number', u); });
-      dataTable.addRows(data.lineChartRows);
-      var options = { legend: { position: 'bottom' }, curveType: 'function', chartArea: { width: '85%', height: '70%' } };
-      var chart = new google.visualization.LineChart(el);
-      chart.draw(dataTable, options);
+    el.innerHTML = '<p style="color:#888;">در حال بارگذاری نمودار...</p>';
+    ensureChartsLoaded(function () {
+      try {
+        el.innerHTML = '';
+        var dataTable = new google.visualization.DataTable();
+        dataTable.addColumn('string', 'تاریخ');
+        data.users.forEach(function (u) { dataTable.addColumn('number', u); });
+        dataTable.addRows(data.lineChartRows);
+        var options = { legend: { position: 'bottom' }, curveType: 'function', chartArea: { width: '85%', height: '70%' } };
+        var chart = new google.visualization.LineChart(el);
+        chart.draw(dataTable, options);
+      } catch (e) {
+        el.innerHTML = '<p style="color:#991b1b;">نمودار بارگذاری نشد (مشکل اتصال اینترنت به سرویس نمودار گوگل)</p>';
+      }
     });
   }
 
@@ -646,11 +808,44 @@
 
   var resultClearTimer = null;
   var currentProduct = null;
+  var lockPollTimer = null;
+
+  function stopLockPolling() {
+    if (lockPollTimer) { clearInterval(lockPollTimer); lockPollTimer = null; }
+  }
+
+  function startLockPolling() {
+    stopLockPolling();
+    lockPollTimer = setInterval(function () {
+      if (!currentProduct || !currentUser) { stopLockPolling(); return; }
+      apiCall(authParams({ action: 'checklock', supplierName: currentProduct.supplierName, rowIndex: currentProduct.rowIndex, sessionId: sessionId }))
+        .then(function (res) {
+          if (!res.active) {
+            stopLockPolling();
+            currentProduct = null;
+            document.getElementById('countsBox').classList.add('hidden');
+            showMsg('countMsg', 'قفل این کالا توسط مدیر باز شد؛ برای ادامه ثبت، دوباره بارکد را استعلام بگیرید.', false);
+          }
+        }).catch(function () {});
+    }, 6000);
+  }
 
   function renderInquiryResult(res) {
     var box = document.getElementById('inquiryResult');
     var countsBox = document.getElementById('countsBox');
     if (resultClearTimer) { clearTimeout(resultClearTimer); resultClearTimer = null; }
+
+    if (res.found && res.locked) {
+      box.innerHTML =
+        '<div class="result-box result-locked">' +
+        '🔒 ' + res.message + '<br>' +
+        'نام کالا: ' + res.productName + ' | کد: ' + res.productCode +
+        '</div>';
+      currentProduct = null;
+      stopLockPolling();
+      countsBox.classList.add('hidden');
+      return;
+    }
 
     if (res.found) {
       box.innerHTML =
@@ -678,9 +873,11 @@
       updateCountLocks('', savedFlag);
       document.getElementById('countMsg').innerHTML = '';
       countsBox.classList.remove('hidden');
+      startLockPolling();
     } else {
       box.innerHTML = '<div class="result-box result-notfound">❌ ' + res.message + '</div>';
       currentProduct = null;
+      stopLockPolling();
       countsBox.classList.add('hidden');
       resultClearTimer = setTimeout(function () { box.innerHTML = ''; }, 3000);
     }
@@ -689,7 +886,7 @@
   function submitInquiry() {
     var barcode = document.getElementById('manualBarcode').value.trim();
     if (!barcode || !currentUser) return;
-    apiCall(authParams({ action: 'lookup', barcode: barcode })).then(function (res) {
+    apiCall(authParams({ action: 'lookup', barcode: barcode, sessionId: sessionId })).then(function (res) {
       renderInquiryResult(res);
       document.getElementById('manualBarcode').value = '';
       document.getElementById('manualBarcode').blur();
@@ -792,11 +989,44 @@
 
   var resultClearTimerU = null;
   var currentProductU = null;
+  var lockPollTimerU = null;
+
+  function stopLockPollingU() {
+    if (lockPollTimerU) { clearInterval(lockPollTimerU); lockPollTimerU = null; }
+  }
+
+  function startLockPollingU() {
+    stopLockPollingU();
+    lockPollTimerU = setInterval(function () {
+      if (!currentProductU || !currentUser) { stopLockPollingU(); return; }
+      apiCall(authParams({ action: 'checklock', supplierName: currentProductU.supplierName, rowIndex: currentProductU.rowIndex, sessionId: sessionId }))
+        .then(function (res) {
+          if (!res.active) {
+            stopLockPollingU();
+            currentProductU = null;
+            document.getElementById('countsBoxU').classList.add('hidden');
+            showMsg('countMsgU', 'قفل این کالا توسط مدیر باز شد؛ برای ادامه ثبت، دوباره بارکد را استعلام بگیرید.', false);
+          }
+        }).catch(function () {});
+    }, 6000);
+  }
 
   function renderInquiryResultU(res) {
     var box = document.getElementById('inquiryResultU');
     var countsBox = document.getElementById('countsBoxU');
     if (resultClearTimerU) { clearTimeout(resultClearTimerU); resultClearTimerU = null; }
+
+    if (res.found && res.locked) {
+      box.innerHTML =
+        '<div class="result-box result-locked">' +
+        '🔒 ' + res.message + '<br>' +
+        'نام کالا: ' + res.productName + ' | کد: ' + res.productCode +
+        '</div>';
+      currentProductU = null;
+      stopLockPollingU();
+      countsBox.classList.add('hidden');
+      return;
+    }
 
     if (res.found) {
       box.innerHTML =
@@ -824,9 +1054,11 @@
       updateCountLocks('U', savedFlagU);
       document.getElementById('countMsgU').innerHTML = '';
       countsBox.classList.remove('hidden');
+      startLockPollingU();
     } else {
       box.innerHTML = '<div class="result-box result-notfound">❌ ' + res.message + '</div>';
       currentProductU = null;
+      stopLockPollingU();
       countsBox.classList.add('hidden');
       resultClearTimerU = setTimeout(function () { box.innerHTML = ''; }, 3000);
     }
@@ -835,7 +1067,7 @@
   function submitInquiryU() {
     var barcode = document.getElementById('manualBarcodeU').value.trim();
     if (!barcode || !currentUser) return;
-    apiCall(authParams({ action: 'lookup', barcode: barcode })).then(function (res) {
+    apiCall(authParams({ action: 'lookup', barcode: barcode, sessionId: sessionId })).then(function (res) {
       renderInquiryResultU(res);
       document.getElementById('manualBarcodeU').value = '';
       document.getElementById('manualBarcodeU').blur();
@@ -1117,6 +1349,20 @@
     }(n);
     document.getElementById('new' + n + 'U').addEventListener('input', onChangeU);
     document.getElementById('count' + n + 'U').addEventListener('input', onChangeU);
+  });
+
+  /* در صورت وجود اطلاعات ورود ذخیره‌شده، به‌صورت خودکار وارد شو */
+  tryAutoLogin();
+
+  /* قفل کالای در حال ویرایش این تب هنگام بستن/ترک صفحه آزاد شود */
+  window.addEventListener('beforeunload', function () {
+    if (currentUser) {
+      try {
+        navigator.sendBeacon(SCRIPT_URL + '?' + Object.keys(authParams({ action: 'releaselock', sessionId: sessionId }))
+          .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(authParams({ action: 'releaselock', sessionId: sessionId })[k]); })
+          .join('&'));
+      } catch (e) {}
+    }
   });
 </script>
 </body>
