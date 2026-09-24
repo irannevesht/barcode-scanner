@@ -267,6 +267,7 @@
       <p style="font-size:13px; color:#666;">تا زمانی که یک کاربر روی یک کالا باز است، آن کالا قفل می‌شود تا
       دو نفر هم‌زمان روی آن ثبت نکنند. در صورت نیاز (مثلا قطع ارتباط کاربر)، می‌توانید قفل را از اینجا باز کنید.</p>
       <button class="secondary" onclick="loadLocks()">به‌روزرسانی لیست</button>
+      <button class="danger" onclick="unlockAllProducts()">باز کردن قفل همه کالاها</button>
       <table>
         <thead><tr><th>تامین‌کننده</th><th>کد کالا</th><th>نام کالا</th><th>کاربر</th><th>زمان قفل</th><th>عملیات</th></tr></thead>
         <tbody id="locksTableBody"></tbody>
@@ -695,6 +696,18 @@
     if (!confirm('آیا از باز کردن قفل این کالا مطمئن هستید؟ کاربری که در حال ثبت آن است از صفحه آن خارج می‌شود.')) return;
     apiCall(authParams({ action: 'unlocklock', supplierName: supplierName, rowIndex: rowIndex })).then(function (res) {
       showMsg('locksMsg', res.success ? 'قفل باز شد' : (res.message || 'خطا'), res.success);
+      loadLocks();
+    }).catch(function (err) { showMsg('locksMsg', 'خطا در اتصال: ' + err, false); });
+  }
+
+  function unlockAllProducts() {
+    if (!confirm('آیا از باز کردن قفل تمام کالاها مطمئن هستید؟ همه کاربرانی که در حال ثبت کالایی هستند از صفحه آن خارج می‌شوند.')) return;
+    apiCall(authParams({ action: 'unlockall' })).then(function (res) {
+      if (res.success) {
+        showMsg('locksMsg', 'قفل ' + res.count + ' کالا باز شد', true);
+      } else {
+        showMsg('locksMsg', res.message || 'خطا', false);
+      }
       loadLocks();
     }).catch(function (err) { showMsg('locksMsg', 'خطا در اتصال: ' + err, false); });
   }
