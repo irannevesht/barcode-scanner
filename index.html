@@ -332,6 +332,42 @@
     sessionStorage.setItem('invSessionId_v1', sessionId);
   }
 
+  /* تبدیل تاریخ میلادی (فرمت yyyy/MM/dd HH:mm:ss که از سرور می‌آید) به تاریخ و ساعت شمسی برای نمایش */
+  function toJalaliDisplay(gregorianStr) {
+    if (!gregorianStr) return '';
+    var parts = String(gregorianStr).trim().split(' ');
+    var datePart = parts[0], timePart = parts[1] || '';
+    var dp = datePart.split('/').map(Number);
+    if (dp.length !== 3 || dp.some(isNaN)) return gregorianStr;
+    var gy = dp[0], gm = dp[1], gd = dp[2];
+
+    // الگوریتم استاندارد تبدیل میلادی به شمسی (jalaali)
+    var g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+    var jy;
+    var gy2 = (gm > 2) ? (gy + 1) : gy;
+    var days = 355666 + (365 * gy) + Math.floor((gy2 + 3) / 4) - Math.floor((gy2 + 99) / 100) +
+      Math.floor((gy2 + 399) / 400) + gd + g_d_m[gm - 1];
+    jy = -1595 + (33 * Math.floor(days / 12053));
+    days %= 12053;
+    jy += 4 * Math.floor(days / 1461);
+    days %= 1461;
+    if (days > 365) {
+      jy += Math.floor((days - 1) / 365);
+      days = (days - 1) % 365;
+    }
+    var jm, jd;
+    if (days < 186) {
+      jm = 1 + Math.floor(days / 31);
+      jd = 1 + (days % 31);
+    } else {
+      jm = 7 + Math.floor((days - 186) / 30);
+      jd = 1 + ((days - 186) % 30);
+    }
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    var jalaliDate = jy + '/' + pad(jm) + '/' + pad(jd);
+    return timePart ? (jalaliDate + ' ' + timePart) : jalaliDate;
+  }
+
   function showMsg(elId, text, ok) {
     document.getElementById(elId).innerHTML =
       '<div class="msg ' + (ok ? 'msg-ok' : 'msg-err') + '">' + text + '</div>';
@@ -631,7 +667,7 @@
         var tdCode = document.createElement('td'); tdCode.innerText = l.productCode;
         var tdName = document.createElement('td'); tdName.innerText = l.productName;
         var tdUser = document.createElement('td'); tdUser.innerText = l.fullName || l.username;
-        var tdTime = document.createElement('td'); tdTime.innerText = l.lockedAt;
+        var tdTime = document.createElement('td'); tdTime.innerText = toJalaliDisplay(l.lockedAt);
         var tdOps = document.createElement('td'); tdOps.appendChild(unlockBtn);
 
         tr.appendChild(tdSup); tr.appendChild(tdCode); tr.appendChild(tdName);
