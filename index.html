@@ -474,10 +474,13 @@
     }
     try { localStorage.removeItem(LOGIN_STORAGE_KEY); } catch (e) {}
     currentUser = null;
+    currentProduct = null;
+    currentProductU = null;
     stopScannerIfRunning();
     stopScannerIfRunningU();
     stopLockPolling();
     stopLockPollingU();
+    stopLocksAutoRefresh();
     document.getElementById('adminView').classList.add('hidden');
     document.getElementById('userView').classList.add('hidden');
     document.getElementById('loginView').classList.remove('hidden');
@@ -486,6 +489,11 @@
   }
 
   /* ---------------- تب‌های پنل مدیر ---------------- */
+  var locksAutoRefreshTimer = null;
+  function stopLocksAutoRefresh() {
+    if (locksAutoRefreshTimer) { clearInterval(locksAutoRefreshTimer); locksAutoRefreshTimer = null; }
+  }
+
   function showAdminTab(tab) {
     ['scan', 'users', 'report', 'suppliers', 'locks'].forEach(function (t) {
       document.getElementById(t + 'Tab').classList.toggle('hidden', t !== tab);
@@ -494,7 +502,13 @@
     if (tab === 'users') loadUsers();
     if (tab === 'report') loadReport();
     if (tab === 'suppliers') loadSuppliers();
-    if (tab === 'locks') loadLocks();
+
+    stopLocksAutoRefresh();
+    if (tab === 'locks') {
+      loadLocks();
+      // تا وقتی مدیر روی این تب است، لیست هر ۵ ثانیه خودکار به‌روز می‌شود تا آزاد شدن قفل‌ها فوری دیده شود
+      locksAutoRefreshTimer = setInterval(loadLocks, 5000);
+    }
   }
   function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
