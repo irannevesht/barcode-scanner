@@ -8,6 +8,7 @@
   <script src="https://www.gstatic.com/charts/loader.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://fastly.jsdelivr.net/npm/barcode-detector@3/dist/iife/ponyfill.min.js"></script>
+  <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -47,6 +48,7 @@
     }
     button.secondary { background: #6b7280; }
     button.danger { background: #dc2626; }
+    button.excel { background: #16a34a; }
     button:hover { opacity: 0.9; }
     button:disabled { background: #cbd5e1 !important; cursor: not-allowed; opacity: 0.8; }
     .hidden { display: none !important; }
@@ -64,6 +66,10 @@
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { border: 1px solid #e2e2e2; padding: 8px; text-align: center; font-size: 14px; }
     th { background: #f0f2f5; }
+    th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    th.sortable:hover { background: #e2e6ec; }
+    th.sortable .sort-arrow { font-size: 11px; color: #888; margin-right: 3px; }
+    th.sortable.sorted .sort-arrow { color: #2563eb; }
     .result-box { margin-top: 16px; padding: 16px; border-radius: 8px; text-align: center; font-size: 16px; }
     .result-found { background: #dcfce7; color: #166534; }
     .result-notfound { background: #fee2e2; color: #991b1b; }
@@ -438,6 +444,19 @@
     return p;
   }
 
+  /* دانلود آرایه‌ای از ردیف‌ها (هر ردیف یک آبجکت {label: value}) به صورت فایل اکسل */
+  function downloadRowsAsExcel(rows, sheetName, fileName) {
+    if (typeof XLSX === 'undefined') {
+      alert('کتابخانه خروجی اکسل بارگذاری نشد. اتصال اینترنت را بررسی کنید.');
+      return;
+    }
+    if (!rows || !rows.length) { alert('داده‌ای برای خروجی گرفتن وجود ندارد'); return; }
+    var ws = XLSX.utils.json_to_sheet(rows);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName || 'Sheet1');
+    XLSX.writeFile(wb, fileName || 'export.xlsx');
+  }
+
   /* ---------------- کمکی‌های مشترک ردیف‌های شمارش (برای هر دو نسخه مدیر و کاربر) ---------------- */
   function setCountRowEnabled(n, suffix, enabled) {
     var count = document.getElementById('count' + n + suffix);
@@ -496,9 +515,20 @@
      - مدیر: همه‌ی ثبت‌ها  |  کاربر عادی: فقط ثبت‌های خودش (سرور اعمال می‌کند)
      ======================================================================= */
   function makeCountReport(containerId, p, showUser, title) {
-    var st = { page: 1, pages: 1, total: 0 };
+    var st = { page: 1, pages: 1, total: 0, rows: [], sortKey: null, sortDir: 1 };
     var searchTimer = null;
     var box = document.getElementById(containerId);
+
+    var COLS_DEF = [
+      { key: 'time', label: 'زمان', sortable: true }
+    ].concat(showUser ? [{ key: 'user', label: 'کاربر', sortable: true }] : []).concat([
+      { key: 'countNumber', label: 'شمارش', sortable: true },
+      { key: 'barcode', label: 'بارکد', sortable: true },
+      { key: 'productName', label: 'نام کالا', sortable: true },
+      { key: 'before', label: 'قبل از شمارش', sortable: true },
+      { key: 'delta', label: 'تعداد شمارش', sortable: true },
+      { key: 'after', label: 'بعد از شمارش', sortable: true }
+    ]);
 
     box.innerHTML =
       '<h2>' + title + '</h2>' +
@@ -510,11 +540,12 @@
           '<select id="' + p + 'Size"><option value="10">10</option><option value="25" selected>25</option>' +
           '<option value="50">50</option><option value="100">100</option><option value="200">200</option></select></div>' +
         '<div class="btn-col"><label>&nbsp;</label><button class="secondary" id="' + p + 'Refresh">به‌روزرسانی</button></div>' +
+        '<div class="btn-col"><label>&nbsp;</label><button class="excel" id="' + p + 'Excel">📊 خروجی اکسل</button></div>' +
       '</div>' +
       '<table class="report-table"><thead><tr>' +
-        '<th>زمان</th>' + (showUser ? '<th>کاربر</th>' : '') +
-        '<th>شمارش</th><th>بارکد</th><th>نام کالا</th>' +
-        '<th>قبل از شمارش</th><th>تعداد شمارش</th><th>بعد از شمارش</th>' +
+        COLS_DEF.map(function (c) {
+          return '<th class="sortable" data-key="' + c.key + '"><span class="sort-arrow">↕</span>' + c.label + '</th>';
+        }).join('') +
       '</tr></thead><tbody id="' + p + 'Body"></tbody></table>' +
       '<div class="pager">' +
         '<button id="' + p + 'Prev">صفحه قبل</button>' +
@@ -523,7 +554,8 @@
       '</div>';
 
     function el(id) { return document.getElementById(p + id); }
-    var COLS = showUser ? 8 : 7;
+    var COLS = COLS_DEF.length;
+    var names = { 1: 'اول', 2: 'دوم', 3: 'سوم' };
 
     function td(text, cls) {
       var c = document.createElement('td');
@@ -532,12 +564,54 @@
       return c;
     }
 
-    function render(res) {
+    function rowValue(r, key) {
+      switch (key) {
+        case 'time': return r.time || '';
+        case 'user': return r.fullName || r.username || '';
+        case 'countNumber': return Number(r.countNumber) || 0;
+        case 'barcode': return r.barcode || '';
+        case 'productName': return r.productName || '';
+        case 'before': return Number(r.before) || 0;
+        case 'delta': return Number(r.delta) || 0;
+        case 'after': return Number(r.after) || 0;
+        default: return '';
+      }
+    }
+
+    function sortedRows() {
+      var rows = st.rows.slice();
+      if (!st.sortKey) return rows;
+      rows.sort(function (a, b) {
+        var va = rowValue(a, st.sortKey), vb = rowValue(b, st.sortKey);
+        var cmp;
+        if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
+        else cmp = String(va).localeCompare(String(vb), 'fa');
+        return cmp * st.sortDir;
+      });
+      return rows;
+    }
+
+    function updateSortHeaders() {
+      var ths = box.querySelectorAll('th.sortable');
+      ths.forEach(function (th) {
+        var key = th.getAttribute('data-key');
+        var arrow = th.querySelector('.sort-arrow');
+        if (key === st.sortKey) {
+          th.classList.add('sorted');
+          arrow.innerText = st.sortDir === 1 ? '↑' : '↓';
+        } else {
+          th.classList.remove('sorted');
+          arrow.innerText = '↕';
+        }
+      });
+    }
+
+    function renderRows() {
       var body = el('Body');
       body.innerHTML = '';
-      st.page = res.page; st.pages = res.pages; st.total = res.total;
+      var rows = sortedRows();
 
-      if (!res.rows.length) {
+      if (!rows.length) {
         var tr0 = document.createElement('tr');
         var t0 = document.createElement('td');
         t0.colSpan = COLS;
@@ -545,8 +619,7 @@
         tr0.appendChild(t0);
         body.appendChild(tr0);
       }
-      var names = { 1: 'اول', 2: 'دوم', 3: 'سوم' };
-      res.rows.forEach(function (r) {
+      rows.forEach(function (r) {
         var tr = document.createElement('tr');
         tr.appendChild(td(toJalaliDisplay(r.time)));
         if (showUser) tr.appendChild(td(r.fullName || r.username));
@@ -559,7 +632,13 @@
         tr.appendChild(td(r.after));
         body.appendChild(tr);
       });
+      updateSortHeaders();
+    }
 
+    function render(res) {
+      st.page = res.page; st.pages = res.pages; st.total = res.total;
+      st.rows = res.rows || [];
+      renderRows();
       el('Info').innerText = 'صفحه ' + res.page + ' از ' + res.pages + ' (' + res.total + ' مورد)';
       el('Prev').disabled = res.page <= 1;
       el('Next').disabled = res.page >= res.pages;
@@ -580,9 +659,44 @@
       }).catch(function (err) { showMsg(p + 'Msg', 'خطا در اتصال: ' + err, false); });
     }
 
+    function exportExcel() {
+      if (!currentUser) return;
+      el('Excel').disabled = true;
+      var origText = el('Excel').innerText;
+      el('Excel').innerText = 'در حال آماده‌سازی...';
+      apiCall(authParams({
+        action: 'countreport',
+        page: 1,
+        pageSize: 100000,
+        q: el('Search').value.trim()
+      })).then(function (res) {
+        el('Excel').disabled = false;
+        el('Excel').innerText = origText;
+        if (!res.success) { showMsg(p + 'Msg', res.message || 'خطا در دریافت گزارش', false); return; }
+        var rows = (res.rows || []).map(function (r) {
+          var obj = {};
+          obj['زمان'] = toJalaliDisplay(r.time);
+          if (showUser) obj['کاربر'] = r.fullName || r.username;
+          obj['شمارش'] = names[r.countNumber] || r.countNumber;
+          obj['بارکد'] = r.barcode;
+          obj['نام کالا'] = r.productName;
+          obj['قبل از شمارش'] = r.before;
+          obj['تعداد شمارش'] = r.delta;
+          obj['بعد از شمارش'] = r.after;
+          return obj;
+        });
+        downloadRowsAsExcel(rows, 'گزارش شمارش', 'گزارش-شمارش.xlsx');
+      }).catch(function (err) {
+        el('Excel').disabled = false;
+        el('Excel').innerText = origText;
+        showMsg(p + 'Msg', 'خطا در اتصال: ' + err, false);
+      });
+    }
+
     el('Prev').onclick = function () { if (st.page > 1) load(st.page - 1); };
     el('Next').onclick = function () { if (st.page < st.pages) load(st.page + 1); };
     el('Refresh').onclick = function () { load(); };
+    el('Excel').onclick = exportExcel;
     el('Size').onchange = function () { load(1); };
     el('Search').addEventListener('input', function () {
       if (searchTimer) clearTimeout(searchTimer);
@@ -593,6 +707,15 @@
     });
     el('Prev').disabled = true;
     el('Next').disabled = true;
+
+    box.querySelectorAll('th.sortable').forEach(function (th) {
+      th.addEventListener('click', function () {
+        var key = th.getAttribute('data-key');
+        if (st.sortKey === key) { st.sortDir = -st.sortDir; }
+        else { st.sortKey = key; st.sortDir = 1; }
+        renderRows();
+      });
+    });
 
     return { load: load };
   }
@@ -608,9 +731,17 @@
      ======================================================================= */
   function makeDiffList(containerId, p, mode, title, desc) {
     var isDiff = (mode === 'diff');
-    var st = { page: 1, pages: 1, total: 0, editing: null, pending: false, pollTimer: null };
+    var st = { page: 1, pages: 1, total: 0, editing: null, pending: false, pollTimer: null, rows: [], sortKey: null, sortDir: 1 };
     var searchTimer = null;
     var box = document.getElementById(containerId);
+
+    var COLS_DEF = [
+      { key: 'supplierName', label: 'برند' },
+      { key: 'barcode', label: 'بارکد' },
+      { key: 'productName', label: 'نام کالا' },
+      { key: 'stock', label: 'موجودی انبار' },
+      { key: 'finalCount', label: 'شمارش نهایی' }
+    ].concat(isDiff ? [{ key: 'diff', label: 'اختلاف موجودی' }] : []);
 
     box.innerHTML =
       '<h2>' + title + '</h2>' +
@@ -623,10 +754,12 @@
           '<select id="' + p + 'Size"><option value="10">10</option><option value="25" selected>25</option>' +
           '<option value="50">50</option><option value="100">100</option><option value="200">200</option></select></div>' +
         '<div class="btn-col"><label>&nbsp;</label><button class="secondary" id="' + p + 'Refresh">به‌روزرسانی</button></div>' +
+        '<div class="btn-col"><label>&nbsp;</label><button class="excel" id="' + p + 'Excel">📊 خروجی اکسل</button></div>' +
       '</div>' +
       '<table class="report-table"><thead><tr>' +
-        '<th>برند</th><th>بارکد</th><th>نام کالا</th><th>موجودی انبار</th><th>شمارش نهایی</th>' +
-        (isDiff ? '<th>اختلاف موجودی</th>' : '') +
+        COLS_DEF.map(function (c) {
+          return '<th class="sortable" data-key="' + c.key + '"><span class="sort-arrow">↕</span>' + c.label + '</th>';
+        }).join('') +
         '<th>عملیات</th>' +
       '</tr></thead><tbody id="' + p + 'Body"></tbody></table>' +
       '<div class="pager">' +
@@ -636,13 +769,53 @@
       '</div>';
 
     function el(id) { return document.getElementById(p + id); }
-    var COLS = isDiff ? 7 : 6;
+    var COLS = COLS_DEF.length + 1;
 
     function td(text, cls) {
       var c = document.createElement('td');
       c.innerText = (text === undefined || text === null) ? '' : text;
       if (cls) c.className = cls;
       return c;
+    }
+
+    function rowValue(r, key) {
+      switch (key) {
+        case 'supplierName': return r.supplierName || '';
+        case 'barcode': return r.barcode || '';
+        case 'productName': return r.productName || '';
+        case 'stock': return (r.stock === '' || r.stock === null || r.stock === undefined) ? 0 : Number(r.stock);
+        case 'finalCount': return (r.finalCount === '' || r.finalCount === null || r.finalCount === undefined) ? -Infinity : Number(r.finalCount);
+        case 'diff': return Number(r.diff) || 0;
+        default: return '';
+      }
+    }
+
+    function sortedRows() {
+      var rows = st.rows.slice();
+      if (!st.sortKey) return rows;
+      rows.sort(function (a, b) {
+        var va = rowValue(a, st.sortKey), vb = rowValue(b, st.sortKey);
+        var cmp;
+        if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
+        else cmp = String(va).localeCompare(String(vb), 'fa');
+        return cmp * st.sortDir;
+      });
+      return rows;
+    }
+
+    function updateSortHeaders() {
+      var ths = box.querySelectorAll('th.sortable');
+      ths.forEach(function (th) {
+        var key = th.getAttribute('data-key');
+        var arrow = th.querySelector('.sort-arrow');
+        if (key === st.sortKey) {
+          th.classList.add('sorted');
+          arrow.innerText = st.sortDir === 1 ? '↑' : '↓';
+        } else {
+          th.classList.remove('sorted');
+          arrow.innerText = '↕';
+        }
+      });
     }
 
     function stopPoll() {
@@ -779,12 +952,12 @@
       });
     }
 
-    function render(res) {
+    function renderRows() {
       var body = el('Body');
       body.innerHTML = '';
-      st.page = res.page; st.pages = res.pages; st.total = res.total;
+      var rows = sortedRows();
 
-      if (!res.rows.length) {
+      if (!rows.length) {
         var tr0 = document.createElement('tr');
         var t0 = document.createElement('td');
         t0.colSpan = COLS;
@@ -793,7 +966,7 @@
         body.appendChild(tr0);
       }
 
-      res.rows.forEach(function (r) {
+      rows.forEach(function (r) {
         var tr = document.createElement('tr');
         tr.appendChild(td(r.supplierName));
         tr.appendChild(td(r.barcode));
@@ -824,7 +997,13 @@
         tr.appendChild(opsTd);
         body.appendChild(tr);
       });
+      updateSortHeaders();
+    }
 
+    function render(res) {
+      st.page = res.page; st.pages = res.pages; st.total = res.total;
+      st.rows = res.rows || [];
+      renderRows();
       el('Info').innerText = 'صفحه ' + res.page + ' از ' + res.pages + ' (' + res.total + ' مورد)';
       el('Prev').disabled = res.page <= 1;
       el('Next').disabled = res.page >= res.pages;
@@ -848,9 +1027,45 @@
       }).catch(function (err) { showMsg(p + 'Msg', 'خطا در اتصال: ' + err, false); });
     }
 
+    function exportExcel() {
+      if (!currentUser) return;
+      el('Excel').disabled = true;
+      var origText = el('Excel').innerText;
+      el('Excel').innerText = 'در حال آماده‌سازی...';
+      apiCall(authParams({
+        action: 'difflist',
+        mode: mode,
+        page: 1,
+        pageSize: 100000,
+        q: el('Search').value.trim(),
+        sessionId: sessionId
+      })).then(function (res) {
+        el('Excel').disabled = false;
+        el('Excel').innerText = origText;
+        if (!res.success) { showMsg(p + 'Msg', res.message || 'خطا در دریافت لیست', false); return; }
+        var rows = (res.rows || []).map(function (r) {
+          var obj = {};
+          obj['برند'] = r.supplierName;
+          obj['بارکد'] = r.barcode;
+          obj['نام کالا'] = r.productName;
+          obj['موجودی انبار'] = r.stock;
+          obj['شمارش نهایی'] = (r.finalCount === '' || r.finalCount === null || r.finalCount === undefined) ? '' : r.finalCount;
+          if (isDiff) obj['اختلاف موجودی'] = r.diff;
+          return obj;
+        });
+        downloadRowsAsExcel(rows, isDiff ? 'اختلاف موجودی' : 'کالاهای شمارش نشده',
+          (isDiff ? 'اختلاف-موجودی' : 'کالاهای-شمارش-نشده') + '.xlsx');
+      }).catch(function (err) {
+        el('Excel').disabled = false;
+        el('Excel').innerText = origText;
+        showMsg(p + 'Msg', 'خطا در اتصال: ' + err, false);
+      });
+    }
+
     el('Prev').onclick = function () { if (st.page > 1) load(st.page - 1); };
     el('Next').onclick = function () { if (st.page < st.pages) load(st.page + 1); };
     el('Refresh').onclick = function () { load(); };
+    el('Excel').onclick = exportExcel;
     el('Size').onchange = function () { load(1); };
     el('Search').addEventListener('input', function () {
       if (searchTimer) clearTimeout(searchTimer);
@@ -862,11 +1077,21 @@
     el('Prev').disabled = true;
     el('Next').disabled = true;
 
+    box.querySelectorAll('th.sortable').forEach(function (th) {
+      th.addEventListener('click', function () {
+        if (st.editing) cancelEdit(true);
+        var key = th.getAttribute('data-key');
+        if (st.sortKey === key) { st.sortDir = -st.sortDir; }
+        else { st.sortKey = key; st.sortDir = 1; }
+        renderRows();
+      });
+    });
+
     return { load: load, cancelEdit: cancelEdit, reset: reset };
   }
 
-  var DIFF_DESC = 'کالاهایی که «موجودی انبار منهای شمارش نهایی» آن‌ها خالی یا صفر نیست. شمارش نهایی همان آخرین شمارش ثبت‌شده (اولویت با شمارش سوم، بعد دوم، بعد اول) است و فقط ستون شمارش نهایی قابل ویرایش است. تا زمانی که یک کالا را ویرایش می‌کنید، برای دیگران قفل می‌شود.';
-  var UNCOUNTED_DESC = 'کالاهایی که هیچ‌کدام از شمارش‌های اول، دوم و سوم برایشان ثبت نشده است. مقداری که در شمارش نهایی وارد کنید به‌عنوان «شمارش اول» ثبت می‌شود. تا زمانی که یک کالا را ویرایش می‌کنید، برای دیگران قفل می‌شود.';
+  var DIFF_DESC = 'کالاهایی که «موجودی انبار منهای شمارش نهایی» آن‌ها خالی یا صفر نیست. شمارش نهایی همان آخرین شمارش ثبت‌شده (اولویت با شمارش سوم، بعد دوم، بعد اول) است و فقط ستون شمارش نهایی قابل ویرایش است. تا زمانی که یک کالا را ویرایش می‌کنید، برای دیگران قفل می‌شود. برای مرتب‌سازی روی سربرگ هر ستون کلیک کنید.';
+  var UNCOUNTED_DESC = 'کالاهایی که هیچ‌کدام از شمارش‌های اول، دوم و سوم برایشان ثبت نشده است. مقداری که در شمارش نهایی وارد کنید به‌عنوان «شمارش اول» ثبت می‌شود. تا زمانی که یک کالا را ویرایش می‌کنید، برای دیگران قفل می‌شود. برای مرتب‌سازی روی سربرگ هر ستون کلیک کنید.';
 
   var adminDiff = makeDiffList('diffTab', 'dfa', 'diff', 'اختلاف موجودی', DIFF_DESC);
   var adminUncounted = makeDiffList('uncountedTab', 'una', 'uncounted', 'کالاهای شمارش نشده', UNCOUNTED_DESC);
