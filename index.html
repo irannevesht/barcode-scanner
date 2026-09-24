@@ -2195,6 +2195,14 @@
         current = { supplierName: res.supplierName, rowIndex: res.rowIndex, stock: res.stock };
         var saved = (res.returnQty === '' || res.returnQty === null || res.returnQty === undefined) ? 0 : Number(res.returnQty);
         lastSaved = isNaN(saved) ? 0 : saved;
+
+        // شمارش نهایی = آخرین شمارش ثبت‌شده (اولویت با شمارش سوم، بعد دوم، بعد اول)
+        var finalCountHtml;
+        if (res.count3 !== '' && res.count3 !== null && res.count3 !== undefined) finalCountHtml = '<b>' + res.count3 + '</b> (شمارش سوم)';
+        else if (res.count2 !== '' && res.count2 !== null && res.count2 !== undefined) finalCountHtml = '<b>' + res.count2 + '</b> (شمارش دوم)';
+        else if (res.count1 !== '' && res.count1 !== null && res.count1 !== undefined) finalCountHtml = '<b>' + res.count1 + '</b> (شمارش اول)';
+        else finalCountHtml = '<span style="color:#6b7280; font-weight:normal;">هنوز شمارش نشده</span>';
+
         out.innerHTML =
           '<div class="result-box result-found">' +
           '✅ تامین‌کننده: <b>' + res.supplierName + '</b><br>' +
@@ -2202,6 +2210,7 @@
           'کد کالا: ' + res.productCode + '<br>' +
           'بارکد: ' + res.barcode + '<br>' +
           '<span style="font-size:20px;">موجودی انبار: <b>' + res.stock + '</b></span><br>' +
+          '<span style="font-size:20px;">شمارش نهایی: ' + finalCountHtml + '</span><br>' +
           '<span style="font-size:20px;">باقیمانده نهایی انبار: <b id="' + p + 'Rem"></b></span>' +
           '</div>';
         el('Cur').value = res.returnQty;
