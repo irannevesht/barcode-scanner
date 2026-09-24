@@ -112,6 +112,12 @@
     .diff-edit-input { width: 90px !important; margin: 0 !important; padding: 6px !important; font-size: 14px !important; text-align: center; }
     .diff-ops button { margin: 2px; padding: 6px 12px; font-size: 13px; width: auto; }
 
+    /* اختلاف موجودی در نتیجه‌ی استعلام */
+    .stock-diff-pos { color: #166534; direction: ltr; unicode-bidi: embed; }
+    .stock-diff-neg { color: #991b1b; direction: ltr; unicode-bidi: embed; }
+    .stock-diff-zero { color: #166534; }
+    .stock-diff-none { color: #6b7280; font-weight: normal; }
+
     @media (max-width: 640px) {
       .container { padding: 10px; }
       .card { padding: 14px; border-radius: 8px; }
@@ -459,6 +465,30 @@
       btn.classList.remove('saved');
       btn.classList.add('pending');
     }
+  }
+
+  /* اختلاف موجودی در نتیجه‌ی استعلام: (شمارش نهایی - موجودی)
+     شمارش نهایی = آخرین شمارش ثبت‌شده (سوم، بعد دوم، بعد اول). موجودی خالی = 0.
+     هر بار که استعلام انجام یا شمارشی ذخیره شود دوباره محاسبه می‌شود. */
+  function refreshStockDiff(suffix, stock, savedFlagObj, lastSavedObj) {
+    var el = document.getElementById('stockDiff' + suffix);
+    if (!el) return;
+    var fin = null;
+    if (savedFlagObj[3]) fin = lastSavedObj[3];
+    else if (savedFlagObj[2]) fin = lastSavedObj[2];
+    else if (savedFlagObj[1]) fin = lastSavedObj[1];
+
+    if (fin === null) {
+      el.className = 'stock-diff-none';
+      el.innerText = 'هنوز شمارش نشده';
+      return;
+    }
+    var stockNum = (stock === '' || stock === null || stock === undefined) ? 0 : Number(stock);
+    if (isNaN(stockNum)) stockNum = 0;
+    var d = Math.round((fin - stockNum) * 1000) / 1000;
+    if (d > 0) { el.className = 'stock-diff-pos'; el.innerText = '+' + d; }
+    else if (d < 0) { el.className = 'stock-diff-neg'; el.innerText = String(d); }
+    else { el.className = 'stock-diff-zero'; el.innerText = '0'; }
   }
 
   /* =======================================================================
@@ -1370,9 +1400,10 @@
         'نام کالا: ' + res.productName + '<br>' +
         'کد کالا: ' + res.productCode + '<br>' +
         'بارکد: ' + res.barcode + '<br>' +
-        '<span style="font-size:20px;">موجودی انبار: <b>' + res.stock + '</b></span>' +
+        '<span style="font-size:20px;">موجودی انبار: <b>' + res.stock + '</b></span><br>' +
+        '<span style="font-size:20px;">اختلاف موجودی: <b id="stockDiff"></b></span>' +
         '</div>';
-      currentProduct = { supplierName: res.supplierName, rowIndex: res.rowIndex, productName: res.productName };
+      currentProduct = { supplierName: res.supplierName, rowIndex: res.rowIndex, productName: res.productName, stock: res.stock };
       document.getElementById('count1').value = res.count1;
       document.getElementById('count2').value = res.count2;
       document.getElementById('count3').value = res.count3;
@@ -1386,6 +1417,7 @@
         updateSavedInfo(n);
       });
       updateCountLocks('', savedFlag);
+      refreshStockDiff('', res.stock, savedFlag, lastSaved);
       document.getElementById('countMsg').innerHTML = '';
       countsBox.classList.remove('hidden');
       startLockPolling();
@@ -1462,6 +1494,7 @@
         b.classList.remove('pending');
         b.classList.add('saved');
         updateCountLocks('', savedFlag);
+        if (currentProduct) refreshStockDiff('', currentProduct.stock, savedFlag, lastSaved);
       }
     }).catch(function (err) { showMsg('countMsg', 'خطا در اتصال: ' + err, false); });
   }
@@ -1551,9 +1584,10 @@
         'نام کالا: ' + res.productName + '<br>' +
         'کد کالا: ' + res.productCode + '<br>' +
         'بارکد: ' + res.barcode + '<br>' +
-        '<span style="font-size:20px;">موجودی انبار: <b>' + res.stock + '</b></span>' +
+        '<span style="font-size:20px;">موجودی انبار: <b>' + res.stock + '</b></span><br>' +
+        '<span style="font-size:20px;">اختلاف موجودی: <b id="stockDiffU"></b></span>' +
         '</div>';
-      currentProductU = { supplierName: res.supplierName, rowIndex: res.rowIndex, productName: res.productName };
+      currentProductU = { supplierName: res.supplierName, rowIndex: res.rowIndex, productName: res.productName, stock: res.stock };
       document.getElementById('count1U').value = res.count1;
       document.getElementById('count2U').value = res.count2;
       document.getElementById('count3U').value = res.count3;
@@ -1567,6 +1601,7 @@
         updateSavedInfoU(n);
       });
       updateCountLocks('U', savedFlagU);
+      refreshStockDiff('U', res.stock, savedFlagU, lastSavedU);
       document.getElementById('countMsgU').innerHTML = '';
       countsBox.classList.remove('hidden');
       startLockPollingU();
@@ -1643,6 +1678,7 @@
         b.classList.remove('pending');
         b.classList.add('saved');
         updateCountLocks('U', savedFlagU);
+        if (currentProductU) refreshStockDiff('U', currentProductU.stock, savedFlagU, lastSavedU);
       }
     }).catch(function (err) { showMsg('countMsgU', 'خطا در اتصال: ' + err, false); });
   }
