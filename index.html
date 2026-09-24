@@ -48,6 +48,7 @@
     button.secondary { background: #6b7280; }
     button.danger { background: #dc2626; }
     button:hover { opacity: 0.9; }
+    button:disabled { background: #cbd5e1 !important; cursor: not-allowed; opacity: 0.8; }
     .hidden { display: none !important; }
     .topbar {
       display: flex;
@@ -98,6 +99,14 @@
 
     table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
 
+    /* گزارش شمارش */
+    .pager { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; }
+    .pager button { width: auto; margin: 0; }
+    .pager .pager-info { font-size: 13px; color: #555; text-align: center; flex: 1; }
+    .delta-pos { color: #166534; font-weight: bold; direction: ltr; unicode-bidi: embed; }
+    .delta-neg { color: #991b1b; font-weight: bold; direction: ltr; unicode-bidi: embed; }
+    .report-table td.wrap { white-space: normal; min-width: 180px; }
+
     @media (max-width: 640px) {
       .container { padding: 10px; }
       .card { padding: 14px; border-radius: 8px; }
@@ -119,6 +128,7 @@
       .count-row { flex-wrap: nowrap; }
       .count-row .count-save { width: auto; padding: 9px 8px; margin-bottom: 0; font-size: 12px; }
       .count-row .count-field input { padding: 8px 5px; font-size: 13px; }
+      .pager button { padding: 10px 12px; font-size: 13px; }
     }
 
     .login-container { max-width: 400px; margin-top: 60px; }
@@ -153,6 +163,7 @@
       <button class="tab-btn active" id="tabScanBtn" onclick="showAdminTab('scan')">استعلام بارکد</button>
       <button class="tab-btn" id="tabUsersBtn" onclick="showAdminTab('users')">مدیریت کاربران</button>
       <button class="tab-btn" id="tabReportBtn" onclick="showAdminTab('report')">گزارش پیشرفت</button>
+      <button class="tab-btn" id="tabCountReportBtn" onclick="showAdminTab('countReport')">گزارش شمارش‌ها</button>
       <button class="tab-btn" id="tabSuppliersBtn" onclick="showAdminTab('suppliers')">تامین‌کنندگان</button>
       <button class="tab-btn" id="tabLocksBtn" onclick="showAdminTab('locks')">کالاهای قفل شده</button>
     </div>
@@ -245,6 +256,9 @@
       <div id="lineChart" style="width:100%; height:350px;"></div>
     </div>
 
+    <!-- تب گزارش شمارش‌ها (همه کاربران) -->
+    <div id="countReportTab" class="card hidden"></div>
+
     <!-- تب تامین‌کنندگان -->
     <div id="suppliersTab" class="card hidden">
       <h2>افزودن تامین‌کننده جدید</h2>
@@ -283,7 +297,12 @@
     <button class="secondary" onclick="logout()">خروج</button>
   </div>
   <div class="container">
-    <div class="card">
+    <div class="tabs">
+      <button class="tab-btn active" id="uTabMainBtn" onclick="showUserTab('main')">استعلام و شمارش</button>
+      <button class="tab-btn" id="uTabReportBtn" onclick="showUserTab('report')">گزارش شمارش‌های من</button>
+    </div>
+
+    <div id="uMainTab" class="card">
       <h2>استعلام بارکد</h2>
       <label>جستجوی نام یا کد کالا</label>
       <input type="text" id="productSearchU" list="productListOptionsU" placeholder="نام یا کد کالا را تایپ یا از لیست انتخاب کنید">
@@ -317,6 +336,9 @@
         </div>
       </div>
     </div>
+
+    <!-- گزارش شمارش‌های خود کاربر -->
+    <div id="uReportTab" class="card hidden"></div>
   </div>
 </div>
 
@@ -416,6 +438,115 @@
     }
   }
 
+  /* =======================================================================
+     گزارش تغییرات شمارش (مشترک بین پنل مدیر و پنل کاربر)
+     - مدیر: همه‌ی ثبت‌ها  |  کاربر عادی: فقط ثبت‌های خودش (سرور اعمال می‌کند)
+     ======================================================================= */
+  function makeCountReport(containerId, p, showUser, title) {
+    var st = { page: 1, pages: 1, total: 0 };
+    var searchTimer = null;
+    var box = document.getElementById(containerId);
+
+    box.innerHTML =
+      '<h2>' + title + '</h2>' +
+      '<div id="' + p + 'Msg"></div>' +
+      '<div class="flex">' +
+        '<div><label>جستجو (بارکد، نام یا کد کالا' + (showUser ? '، کاربر' : '') + ')</label>' +
+          '<input type="text" id="' + p + 'Search" placeholder="عبارت جستجو را وارد کنید"></div>' +
+        '<div><label>تعداد نمایش در هر صفحه</label>' +
+          '<select id="' + p + 'Size"><option value="10">10</option><option value="25" selected>25</option>' +
+          '<option value="50">50</option><option value="100">100</option><option value="200">200</option></select></div>' +
+        '<div class="btn-col"><label>&nbsp;</label><button class="secondary" id="' + p + 'Refresh">به‌روزرسانی</button></div>' +
+      '</div>' +
+      '<table class="report-table"><thead><tr>' +
+        '<th>زمان</th>' + (showUser ? '<th>کاربر</th>' : '') +
+        '<th>شمارش</th><th>بارکد</th><th>نام کالا</th>' +
+        '<th>قبل از شمارش</th><th>تعداد شمارش</th><th>بعد از شمارش</th>' +
+      '</tr></thead><tbody id="' + p + 'Body"></tbody></table>' +
+      '<div class="pager">' +
+        '<button id="' + p + 'Prev">صفحه قبل</button>' +
+        '<div class="pager-info" id="' + p + 'Info"></div>' +
+        '<button id="' + p + 'Next">صفحه بعد</button>' +
+      '</div>';
+
+    function el(id) { return document.getElementById(p + id); }
+    var COLS = showUser ? 8 : 7;
+
+    function td(text, cls) {
+      var c = document.createElement('td');
+      c.innerText = (text === undefined || text === null) ? '' : text;
+      if (cls) c.className = cls;
+      return c;
+    }
+
+    function render(res) {
+      var body = el('Body');
+      body.innerHTML = '';
+      st.page = res.page; st.pages = res.pages; st.total = res.total;
+
+      if (!res.rows.length) {
+        var tr0 = document.createElement('tr');
+        var t0 = document.createElement('td');
+        t0.colSpan = COLS;
+        t0.innerText = 'موردی یافت نشد';
+        tr0.appendChild(t0);
+        body.appendChild(tr0);
+      }
+      var names = { 1: 'اول', 2: 'دوم', 3: 'سوم' };
+      res.rows.forEach(function (r) {
+        var tr = document.createElement('tr');
+        tr.appendChild(td(toJalaliDisplay(r.time)));
+        if (showUser) tr.appendChild(td(r.fullName || r.username));
+        tr.appendChild(td(names[r.countNumber] || r.countNumber));
+        tr.appendChild(td(r.barcode));
+        tr.appendChild(td(r.productName, 'wrap'));
+        tr.appendChild(td(r.before));
+        var d = Number(r.delta);
+        tr.appendChild(td(d > 0 ? '+' + d : String(d), d > 0 ? 'delta-pos' : (d < 0 ? 'delta-neg' : '')));
+        tr.appendChild(td(r.after));
+        body.appendChild(tr);
+      });
+
+      el('Info').innerText = 'صفحه ' + res.page + ' از ' + res.pages + ' (' + res.total + ' مورد)';
+      el('Prev').disabled = res.page <= 1;
+      el('Next').disabled = res.page >= res.pages;
+    }
+
+    function load(page) {
+      if (!currentUser) return;
+      if (page) st.page = page;
+      el('Msg').innerHTML = '';
+      apiCall(authParams({
+        action: 'countreport',
+        page: st.page,
+        pageSize: el('Size').value,
+        q: el('Search').value.trim()
+      })).then(function (res) {
+        if (!res.success) { showMsg(p + 'Msg', res.message || 'خطا در دریافت گزارش', false); return; }
+        render(res);
+      }).catch(function (err) { showMsg(p + 'Msg', 'خطا در اتصال: ' + err, false); });
+    }
+
+    el('Prev').onclick = function () { if (st.page > 1) load(st.page - 1); };
+    el('Next').onclick = function () { if (st.page < st.pages) load(st.page + 1); };
+    el('Refresh').onclick = function () { load(); };
+    el('Size').onchange = function () { load(1); };
+    el('Search').addEventListener('input', function () {
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(function () { load(1); }, 400);
+    });
+    el('Search').addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); if (searchTimer) clearTimeout(searchTimer); load(1); }
+    });
+    el('Prev').disabled = true;
+    el('Next').disabled = true;
+
+    return { load: load };
+  }
+
+  var adminCountReport = makeCountReport('countReportTab', 'cra', true, 'گزارش تغییرات شمارش (همه کاربران)');
+  var userCountReport = makeCountReport('uReportTab', 'cru', false, 'گزارش شمارش‌های ثبت‌شده توسط من');
+
   /* ---------------- ورود / خروج ---------------- */
   function enterAppAfterLogin(res) {
     document.getElementById('loginView').classList.add('hidden');
@@ -427,6 +558,7 @@
     } else {
       document.getElementById('userView').classList.remove('hidden');
       document.getElementById('userFullName').innerText = res.fullName;
+      showUserTab('main');
       loadProductListU();
     }
   }
@@ -489,6 +621,18 @@
     document.getElementById('loginPassword').value = '';
   }
 
+  /* ---------------- تب‌های پنل کاربر عادی ---------------- */
+  function showUserTab(tab) {
+    document.getElementById('uMainTab').classList.toggle('hidden', tab !== 'main');
+    document.getElementById('uReportTab').classList.toggle('hidden', tab !== 'report');
+    document.getElementById('uTabMainBtn').classList.toggle('active', tab === 'main');
+    document.getElementById('uTabReportBtn').classList.toggle('active', tab === 'report');
+    if (tab === 'report') {
+      stopScannerIfRunningU();
+      userCountReport.load(1);
+    }
+  }
+
   /* ---------------- تب‌های پنل مدیر ---------------- */
   var locksAutoRefreshTimer = null;
   function stopLocksAutoRefresh() {
@@ -496,13 +640,15 @@
   }
 
   function showAdminTab(tab) {
-    ['scan', 'users', 'report', 'suppliers', 'locks'].forEach(function (t) {
+    ['scan', 'users', 'report', 'countReport', 'suppliers', 'locks'].forEach(function (t) {
       document.getElementById(t + 'Tab').classList.toggle('hidden', t !== tab);
       document.getElementById('tab' + capitalize(t) + 'Btn').classList.toggle('active', t === tab);
     });
     if (tab === 'users') loadUsers();
     if (tab === 'report') loadReport();
+    if (tab === 'countReport') adminCountReport.load(1);
     if (tab === 'suppliers') loadSuppliers();
+    if (tab !== 'scan') stopScannerIfRunning();
 
     stopLocksAutoRefresh();
     if (tab === 'locks') {
@@ -887,7 +1033,7 @@
             stopLockPolling();
             currentProduct = null;
             document.getElementById('countsBox').classList.add('hidden');
-            showMsg('countMsg', 'قفل این کالا توسط مدیر باز شد؛ برای ادامه ثبت، دوباره بارکد را استعلام بگیرید.', false);
+            showMsg('countMsg', 'قفل این کالا باز شد؛ برای ادامه ثبت، دوباره بارکد را استعلام بگیرید.', false);
           }
         }).catch(function () {});
     }, 6000);
@@ -1068,7 +1214,7 @@
             stopLockPollingU();
             currentProductU = null;
             document.getElementById('countsBoxU').classList.add('hidden');
-            showMsg('countMsgU', 'قفل این کالا توسط مدیر باز شد؛ برای ادامه ثبت، دوباره بارکد را استعلام بگیرید.', false);
+            showMsg('countMsgU', 'قفل این کالا باز شد؛ برای ادامه ثبت، دوباره بارکد را استعلام بگیرید.', false);
           }
         }).catch(function () {});
     }, 6000);
@@ -1276,7 +1422,7 @@
         try {
           detect(video).then(function (code) {
             busy = false;
-            if (code) {
+            if (code && state.isScanning) {
               document.getElementById(cfg.inputId).value = code;
               stop();
               cfg.onDetected();
@@ -1361,6 +1507,7 @@
             ],
             videoConstraints: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: "continuous" }] }
           }, function (decodedText) {
+            if (!state.isScanning) return; // جلوگیری از ارسال چندباره‌ی یک بارکد
             document.getElementById(cfg.inputId).value = decodedText;
             stop();
             cfg.onDetected();
