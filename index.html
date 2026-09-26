@@ -439,11 +439,19 @@
       '<div class="msg ' + (ok ? 'msg-ok' : 'msg-err') + '">' + text + '</div>';
   }
 
-  function apiCall(params) {
+  function apiCall(params, _isRetry) {
     var url = SCRIPT_URL + '?' + Object.keys(params).map(function (k) {
       return encodeURIComponent(k) + '=' + encodeURIComponent(params[k] === undefined || params[k] === null ? '' : params[k]);
     }).join('&');
-    return fetch(url).then(function (res) { return res.json(); });
+    return fetch(url).then(function (res) { return res.json(); }).catch(function (err) {
+      // قطعی لحظه‌ای شبکه‌ی موبایل خیلی رایج است؛ یک‌بار خودکار (بدون نمایش به کاربر) دوباره تلاش کن
+      if (_isRetry) throw err;
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () {
+          apiCall(params, true).then(resolve).catch(reject);
+        }, 900);
+      });
+    });
   }
 
   function authParams(extra) {
@@ -1672,13 +1680,18 @@
   function submitInquiry() {
     var barcode = document.getElementById('manualBarcode').value.trim();
     if (!barcode || !currentUser) return;
+    stopLockPolling();
+    document.getElementById('countsBox').classList.add('hidden');
     apiCall(authParams({ action: 'lookup', barcode: barcode, sessionId: sessionId })).then(function (res) {
       renderInquiryResult(res);
       document.getElementById('manualBarcode').value = '';
       document.getElementById('manualBarcode').blur();
     }).catch(function (err) {
       document.getElementById('inquiryResult').innerHTML =
-        '<div class="result-box result-notfound">خطا در اتصال: ' + err + '</div>';
+        '<div class="result-box result-notfound">خطا در اتصال: ' + err + '<br>' +
+        '<button class="secondary" style="margin-top:8px;" id="inquiryRetryBtn">تلاش مجدد</button></div>';
+      var rb = document.getElementById('inquiryRetryBtn');
+      if (rb) rb.onclick = submitInquiry;
     });
   }
 
@@ -1857,13 +1870,18 @@
   function submitInquiryU() {
     var barcode = document.getElementById('manualBarcodeU').value.trim();
     if (!barcode || !currentUser) return;
+    stopLockPollingU();
+    document.getElementById('countsBoxU').classList.add('hidden');
     apiCall(authParams({ action: 'lookup', barcode: barcode, sessionId: sessionId })).then(function (res) {
       renderInquiryResultU(res);
       document.getElementById('manualBarcodeU').value = '';
       document.getElementById('manualBarcodeU').blur();
     }).catch(function (err) {
       document.getElementById('inquiryResultU').innerHTML =
-        '<div class="result-box result-notfound">خطا در اتصال: ' + err + '</div>';
+        '<div class="result-box result-notfound">خطا در اتصال: ' + err + '<br>' +
+        '<button class="secondary" style="margin-top:8px;" id="inquiryRetryBtnU">تلاش مجدد</button></div>';
+      var rbU = document.getElementById('inquiryRetryBtnU');
+      if (rbU) rbU.onclick = submitInquiryU;
     });
   }
 
@@ -2279,12 +2297,18 @@
     function submit() {
       var barcode = el('Barcode').value.trim();
       if (!barcode || !currentUser) return;
+      stopPoll();
+      el('Box').classList.add('hidden');
       apiCall(authParams({ action: 'lookup', barcode: barcode, sessionId: sessionId, purpose: 'return' })).then(function (res) {
         render(res);
         el('Barcode').value = '';
         el('Barcode').blur();
       }).catch(function (err) {
-        el('Result').innerHTML = '<div class="result-box result-notfound">خطا در اتصال: ' + err + '</div>';
+        el('Result').innerHTML =
+          '<div class="result-box result-notfound">خطا در اتصال: ' + err + '<br>' +
+          '<button class="secondary" style="margin-top:8px;" id="' + p + 'RetryBtn">تلاش مجدد</button></div>';
+        var rb = document.getElementById(p + 'RetryBtn');
+        if (rb) rb.onclick = submit;
       });
     }
 
