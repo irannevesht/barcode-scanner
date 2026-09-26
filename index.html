@@ -1580,6 +1580,7 @@
     document.getElementById('manualBarcode').value = firstBarcode;
     submitInquiry();
   }
+  document.getElementById('productSearch').addEventListener('input', selectSearchedProduct);
   document.getElementById('productSearch').addEventListener('change', selectSearchedProduct);
   document.getElementById('productSearch').addEventListener('keydown', function (event) {
     if (event.key === 'Enter') { event.preventDefault(); selectSearchedProduct(); }
@@ -1764,6 +1765,7 @@
     document.getElementById('manualBarcodeU').value = firstBarcode;
     submitInquiryU();
   }
+  document.getElementById('productSearchU').addEventListener('input', selectSearchedProductU);
   document.getElementById('productSearchU').addEventListener('change', selectSearchedProductU);
   document.getElementById('productSearchU').addEventListener('keydown', function (event) {
     if (event.key === 'Enter') { event.preventDefault(); selectSearchedProductU(); }
@@ -1929,7 +1931,7 @@
     var state = {
       mediaStream: null, videoTrack: null, barcodeDetector: null,
       scanTimerId: null, usingDetectorApi: false, torchOn: false, isScanning: false,
-      html5QrCode: null
+      html5QrCode: null, focusTimer: null
     };
     var GUIDE_X = 0.06, GUIDE_TOP = 0.30, GUIDE_BOTTOM = 0.30, ZOOM_SCALE = 2.2;
     var cropCanvas = document.createElement('canvas');
@@ -1972,6 +1974,7 @@
         state.isScanning = true;
         setupZoom();
         setupTorch();
+        setupFocus(video);
         loop(video);
       }).catch(function (err) {
         reader.classList.add('hidden');
@@ -2062,6 +2065,43 @@
       } catch (e) {}
     }
 
+    /* برخی گوشی‌ها (مثلا سامسونگ A54) حالت فوکوس پیوسته (continuous) را از طریق تنظیمات اولیه‌ی
+       دوربین قبول نمی‌کنند. اینجا دوباره صریحاً فعالش می‌کنیم، و اگر پشتیبانی نشد،
+       هر ۲ ثانیه یک‌بار خودکار دوباره فوکوس (single-shot) می‌گیریم تا تصویر بارکد واضح بماند.
+       همچنین با ضربه روی تصویر، دوربین سعی می‌کند دقیقا روی همان نقطه فوکوس کند. */
+    function setupFocus(video) {
+      try {
+        if (!state.videoTrack || typeof state.videoTrack.getCapabilities !== 'function') return;
+        var caps = state.videoTrack.getCapabilities();
+        var modes = caps.focusMode || [];
+        if (modes.indexOf('continuous') !== -1) {
+          state.videoTrack.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function () {});
+        } else if (modes.indexOf('single-shot') !== -1) {
+          refocus();
+          state.focusTimer = setInterval(refocus, 2000);
+        }
+        video.style.cursor = 'pointer';
+        video.addEventListener('click', function (ev) { tapToFocus(ev, video); });
+      } catch (e) {}
+    }
+
+    function refocus() {
+      if (!state.videoTrack) return;
+      state.videoTrack.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] }).catch(function () {});
+    }
+
+    function tapToFocus(ev, video) {
+      if (!state.videoTrack) return;
+      var rect = video.getBoundingClientRect();
+      var x = Math.min(Math.max((ev.clientX - rect.left) / rect.width, 0), 1);
+      var y = Math.min(Math.max((ev.clientY - rect.top) / rect.height, 0), 1);
+      state.videoTrack.applyConstraints({
+        advanced: [{ pointsOfInterest: [{ x: x, y: y }], focusMode: 'single-shot' }]
+      }).catch(function () {
+        state.videoTrack.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] }).catch(function () {});
+      });
+    }
+
     function startFallback(reader) {
       if (typeof Html5Qrcode === 'undefined') {
         alert('کتابخانه اسکنر بارگذاری نشده. اتصال اینترنت را بررسی کنید.');
@@ -2106,6 +2146,7 @@
     function stop() {
       state.isScanning = false;
       if (state.scanTimerId) { clearInterval(state.scanTimerId); state.scanTimerId = null; }
+      if (state.focusTimer) { clearInterval(state.focusTimer); state.focusTimer = null; }
       if (state.mediaStream) { state.mediaStream.getTracks().forEach(function (t) { t.stop(); }); state.mediaStream = null; }
       state.videoTrack = null;
       if (state.html5QrCode && state.usingDetectorApi === false) {
@@ -2213,7 +2254,7 @@
           '<span style="font-size:20px;">شمارش نهایی: ' + finalCountHtml + '</span><br>' +
           '<span style="font-size:20px;">باقیمانده نهایی انبار: <b id="' + p + 'Rem"></b></span>' +
           '</div>';
-        el('Cur').value = res.returnQty;
+        el('Cur').value = (res.returnQty === undefined || res.returnQty === null) ? '' : res.returnQty;
         el('New').value = '';
         el('Saved').innerText = '(' + lastSaved + ')';
         el('Save').classList.remove('pending', 'saved');
@@ -2317,6 +2358,7 @@
     el('Inquiry').onclick = submit;
     el('Save').onclick = save;
     el('Barcode').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); submit(); } });
+    el('Search').addEventListener('input', selectSearched);
     el('Search').addEventListener('change', selectSearched);
     el('Search').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); selectSearched(); } });
 
