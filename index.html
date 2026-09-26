@@ -1961,7 +1961,7 @@
       catch (e) { startFallback(reader); return; }
 
       navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" }, width: { ideal: 2560 }, height: { ideal: 1440 }, advanced: [{ focusMode: "continuous" }] }
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: "continuous" }, { zoom: 1 }] }
       }).then(function (stream) {
         state.mediaStream = stream;
         state.videoTrack = stream.getVideoTracks()[0];
@@ -2039,9 +2039,16 @@
         if (!state.videoTrack || typeof state.videoTrack.getCapabilities !== 'function') return;
         var caps = state.videoTrack.getCapabilities();
         if (!caps.zoom) return;
-        zoomRange.min = caps.zoom.min; zoomRange.max = caps.zoom.max; zoomRange.step = caps.zoom.step || 0.1;
+
+        // اگر گوشی چند لنزه است (مثل سامسونگ)، محدوده‌ی زیر 1x معمولا لنز اولترا واید بدون
+        // فوکوس خودکار است؛ کف اسلایدر و مقدار پیش‌فرض را روی 1 قفل می‌کنیم تا همیشه لنز اصلی
+        // (دارای فوکوس خودکار) انتخاب شود، مگر این‌که خودِ دوربین اصلا کمتر از 1 را ساپورت نکند.
+        var minZoom = Math.max(1, caps.zoom.min);
+        zoomRange.min = minZoom; zoomRange.max = caps.zoom.max; zoomRange.step = caps.zoom.step || 0.1;
         var settings = state.videoTrack.getSettings();
-        zoomRange.value = settings.zoom || caps.zoom.min;
+        var startZoom = (settings.zoom && settings.zoom >= minZoom) ? settings.zoom : minZoom;
+        zoomRange.value = startZoom;
+        state.videoTrack.applyConstraints({ advanced: [{ zoom: startZoom }] }).catch(function () {});
         zoomRow.classList.remove('hidden');
         zoomRange.oninput = function () {
           state.videoTrack.applyConstraints({ advanced: [{ zoom: Number(zoomRange.value) }] }).catch(function () {});
